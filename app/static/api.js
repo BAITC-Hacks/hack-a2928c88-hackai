@@ -8,7 +8,13 @@ async function request(path, {method = 'GET', body, role, cardId} = {}) {
     headers['If-Match'] = String(revisions.get(cardId));
   }
   const response = await fetch('/api' + path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
-  const data = await response.json();
+  let data;
+  try { data = await response.json(); }
+  catch {
+    throw new Error(response.ok
+      ? 'Сервер вернул некорректный ответ. Повторите запрос.'
+      : `Сервер временно недоступен (HTTP ${response.status}). Повторите запрос.`);
+  }
   if (!response.ok) {
     const invalidUrl = Array.isArray(data.detail) && data.detail.some(item => item.loc?.includes('prototype_url'));
     const message = typeof data.detail === 'string' ? data.detail : invalidUrl

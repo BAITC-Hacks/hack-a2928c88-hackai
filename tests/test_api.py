@@ -50,6 +50,7 @@ def test_human_confirmation_snapshot_and_stale_edit(client):
 def test_low_score_proposals_manual_choices_and_idempotent_milestone(client):
     cards = client.get('/api/cards').json()
     assert len(cards) == 5
+    assert all(c['synthetic'] and c['evidence'] == {} for c in cards)
     assert [c['rating']['total'] for c in cards] == [100, 82, 67, 49, 34]
     low = cards[-1]
     teams = client.get('/api/teams').json()

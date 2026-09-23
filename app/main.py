@@ -98,8 +98,8 @@ def seed(store):
         for card in fixtures["cards"]:
             item = TaskCard.model_validate(card).model_dump(mode="json")
             record = {"card": item, "revision": 1, "mode": "mock", "provider": "synthetic-fixture",
-                "evidence": {f: {"source_id": "synthetic-fixture:" + item["id"], "quote": item[f]}
-                    for f in CardContent.model_fields if item[f].strip()}, "snapshot": None}
+                # Prepared synthetic cards are examples, not extracted source evidence.
+                "evidence": {}, "snapshot": None}
             record["first_published_at"] = "2026-09-23T08:00:00+00:00"
             record["snapshot"] = card_view(record)
             record["snapshot"]["first_published_at"] = record["first_published_at"]
