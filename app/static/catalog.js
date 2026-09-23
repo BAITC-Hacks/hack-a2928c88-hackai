@@ -9,6 +9,15 @@ const FIELDS = {
 const STATUSES = { pending: 'Ждёт решения', selected: 'Команда выбрана', rejected: 'Отклонён' };
 const PAGE_SIZE = 20;
 const INDUSTRY_CHIPS = 8;
+const CONDITION_FIELDS = { title: 'Название', industry: 'Отрасль', ...FIELDS };
+const conditionText = value => typeof value === 'string' ? value.replace(/\r\n/g, '\n') : '';
+const conditionRevision = value => Number.isInteger(value) && value > 0 ? value : null;
+
+function validConditions(value, taskId) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && typeof taskId === 'string' && value.id === taskId
+    && Object.keys(CONDITION_FIELDS).every(key => value[key] == null || typeof value[key] === 'string');
+}
 let fieldId = 0;
 
 function element(tag, text, className) {
@@ -189,6 +198,9 @@ export function mountCatalog(root, api) {
   let busy = false;
   // Drafts belong to tasks, not to the current tab, page, or team persona.
   const drafts = new Map();
+  const conditionChecks = new Map();
+  const expandedConditions = new Set();
+  const expandedSnapshots = new Set();
 
   // Header with team persona
   const persona = element('select');
@@ -617,6 +629,7 @@ export function mountCatalog(root, api) {
         });
         state.proposals = [...state.proposals.filter(item => item.id !== proposal.id), proposal];
         drafts.delete(card.id);
+        if (conditionChecks.get(card.id)?.status !== 'loading') conditionChecks.delete(card.id);
         bumpCount(card.id, state.proposals.length);
         state.tab = 'proposals';
         renderList();
@@ -632,6 +645,121 @@ export function mountCatalog(root, api) {
     state.cards = state.cards.map(update);
     state.pinned = update(state.pinned);
     state.selected = update(state.selected);
+  }
+
+  function renderConditionResults(taskId) {
+    // An independent read must never replace another task's panel or its draft.
+    if (state.selected?.id !== taskId || state.tab !== 'proposals') return;
+    detail.querySelector('.catalog-proposals')?.replaceWith(proposalSection(state.selected));
+  }
+
+  async function checkConditions(taskId) {
+    if (conditionChecks.get(taskId)?.status === 'loading') return;
+    // Discard the previous result immediately: a failed refresh is not a current check.
+    const check = {status: 'loading'};
+    conditionChecks.set(taskId, check);
+    renderConditionResults(taskId);
+    try {
+      const published = await api.listCards({});
+      if (!Array.isArray(published)) throw new Error('Invalid catalogue response');
+      const current = published.find(card => card?.id === taskId && card.published !== false);
+      check.checkedAt = new Date().toLocaleString('ru-RU');
+      if (!current) check.status = 'unavailable';
+      else {
+        if (!validConditions(current, taskId)) throw new Error('Invalid published conditions');
+        check.card = current;
+        check.status = 'complete';
+      }
+    } catch {
+      check.status = 'error';
+      delete check.card;
+      delete check.checkedAt;
+    }
+    renderConditionResults(taskId);
+  }
+
+  function conditionsHistory(proposal) {
+    const history = element('details', undefined, 'catalog-conditions');
+    history.open = expandedConditions.has(proposal.id);
+    history.addEventListener('toggle', () => {
+      if (history.isConnected) {
+        if (history.open) expandedConditions.add(proposal.id);
+        else expandedConditions.delete(proposal.id);
+      }
+    });
+    const summary = element('summary', 'Условия на момент отклика');
+    history.append(summary);
+    const snapshot = proposal.task_snapshot;
+    if (snapshot == null) {
+      history.append(element('p', 'Условия на момент отклика не сохранены', 'muted'));
+      return history;
+    }
+    if (!validConditions(snapshot, proposal.task_id)) {
+      history.append(element('p', 'История условий недоступна: сохранённый снимок не соответствует задаче.', 'muted'));
+      return history;
+    }
+    const revision = conditionRevision(proposal.card_revision) ?? conditionRevision(snapshot.revision);
+    history.append(element('p', revision ? `Отклик на версию ${revision}.` : 'Версия условий отклика неизвестна.', 'muted'));
+    const check = conditionChecks.get(proposal.task_id);
+    const compare = button(check?.status === 'error' ? 'Повторить проверку условий' : 'Проверить опубликованные условия',
+      () => checkConditions(proposal.task_id), 'btn-quiet');
+    compare.disabled = check?.status === 'loading';
+    history.append(compare);
+    const result = element('div', undefined, 'catalog-conditions-result');
+    result.setAttribute('role', 'status');
+    if (!check) result.append(element('p', 'Проверка ещё не выполнена. Один запрос обновит сравнение для всех откликов этой задачи.', 'muted'));
+    else if (check.status === 'loading') result.append(element('p', 'Проверяем опубликованные условия…'));
+    else if (check.status === 'error') result.append(element('p', 'Не удалось проверить актуальные условия', 'catalog-field-error'));
+    else {
+      result.append(element('p', `Время проверки: ${check.checkedAt}.`, 'muted'));
+      if (check.status === 'unavailable') result.append(element('p', 'Опубликованная версия недоступна'));
+      else if (revision && conditionRevision(check.card.revision) && check.card.revision < revision) {
+        result.append(element('p', 'Сохранённая проверка старше версии отклика. Проверьте опубликованные условия ещё раз.'));
+      } else {
+        const currentRevision = conditionRevision(check.card.revision);
+        result.append(element('p', currentRevision ? `Проверена опубликованная версия ${currentRevision}.` : 'Номер проверенной опубликованной версии неизвестен.', 'muted'));
+        const changes = Object.entries(CONDITION_FIELDS).filter(([key]) => conditionText(snapshot[key]) !== conditionText(check.card[key]));
+        if (!changes.length) result.append(element('p', 'На момент проверки опубликованные условия совпадают с условиями отклика'));
+        else {
+          summary.append(element('span', 'Условия изменились после отклика', 'tag tag-warn'));
+          result.append(element('p', `Изменено ${changes.length} ${plural(changes.length, 'поле', 'поля', 'полей')}.`, 'catalog-progress'));
+          const table = element('table', undefined, 'catalog-conditions-table');
+          table.append(element('caption', 'Изменения опубликованных условий'));
+          const head = element('thead');
+          const headers = element('tr');
+          for (const label of ['Поле', 'Было', 'Опубликовано сейчас']) {
+            const cell = element('th', label); cell.scope = 'col'; headers.append(cell);
+          }
+          head.append(headers);
+          const body = element('tbody');
+          for (const [key, label] of changes) {
+            const row = element('tr');
+            const name = element('th', label); name.scope = 'row';
+            row.append(name, element('td', conditionText(snapshot[key]) || 'Не указано'),
+              element('td', conditionText(check.card[key]) || 'Не указано'));
+            body.append(row);
+          }
+          table.append(head, body);
+          result.append(table);
+        }
+      }
+    }
+    history.append(result);
+    const saved = element('details', undefined, 'catalog-snapshot');
+    saved.open = expandedSnapshots.has(proposal.id);
+    saved.addEventListener('toggle', () => {
+      if (!saved.isConnected) return;
+      if (saved.open) expandedSnapshots.add(proposal.id);
+      else expandedSnapshots.delete(proposal.id);
+    });
+    saved.append(element('summary', 'Сохранённый снимок условий'));
+    const fields = element('dl', undefined, 'catalog-facts');
+    for (const [key, label] of Object.entries(CONDITION_FIELDS)) {
+      fields.append(element('dt', label), element('dd', conditionText(snapshot[key]) || 'Не указано'));
+    }
+    saved.append(fields);
+    history.append(saved, element('p', 'Изменение условий не означает согласие команды. Обсудите изменения перед началом работы.', 'muted'));
+    return history;
   }
 
   function proposalSection(card) {
@@ -690,7 +818,7 @@ export function mountCatalog(root, api) {
         })));
       }
       decide.append(actions);
-      item.append(who, what, decide);
+      item.append(who, what, decide, conditionsHistory(proposal));
       grid.append(item);
     }
     section.append(grid);
