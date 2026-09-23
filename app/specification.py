@@ -9,6 +9,7 @@ from typing import Annotated
 
 from pydantic import Field, StringConstraints, model_validator
 from app.schemas import Model, CardContent
+from app.ai_config import NVIDIA_BASE_URL, model_for, openai_options
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=8000)]
 Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
@@ -151,7 +152,7 @@ class SpecGenerator:
 
     def _log(self, result, started):
         event = {"at": datetime.now(timezone.utc).isoformat(), "workflow": "specification",
-                 "mode": result[1], "provider": result[2], "failures": result[3],
+                 "mode": result[1], "provider": result[2], "model": model_for(result[2]), "failures": result[3],
                  "elapsed_ms": round((time.monotonic() - started) * 1000)}
         try:
             path = Path(os.getenv("LLM_LOG_PATH", "logs/llm_calls.jsonl"))
@@ -165,9 +166,9 @@ class SpecGenerator:
         failures = []
         if os.getenv("MOCK", "1") != "1":
             from openai import OpenAI
-            for provider, key_name, model_name, default in [
-                ("openai", "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4.1-mini"),
-                ("nvidia", "NVIDIA_API_KEY", "NVIDIA_MODEL", "meta/llama-3.3-70b-instruct"),
+            for provider, key_name in [
+                ("openai", "OPENAI_API_KEY"),
+                ("nvidia", "NVIDIA_API_KEY"),
             ]:
                 key = os.getenv(key_name)
                 if not key:
@@ -177,18 +178,32 @@ class SpecGenerator:
                     self.reserve()
                     kwargs = {"api_key": key, "timeout": float(os.getenv("SPEC_TIMEOUT_SECONDS", "90")), "max_retries": 0}
                     if provider == "nvidia":
-                        kwargs["base_url"] = "https://integrate.api.nvidia.com/v1"
+                        kwargs["base_url"] = NVIDIA_BASE_URL
                     with OpenAI(**kwargs) as client:
                         payload = json.dumps({"source": source}, ensure_ascii=False)
                         if provider == "openai":
-                            response = client.responses.parse(model=os.getenv(model_name, default), instructions=PROMPT,
-                                input=payload, text_format=SpecContent, max_output_tokens=6500, store=False)
+                            response = client.responses.parse(**openai_options(), instructions=PROMPT,
+                                input=payload, text_format=SpecContent, max_output_tokens=9000, store=False)
                             content = response.output_parsed
                         else:
-                            response = client.chat.completions.create(model=os.getenv(model_name, default),
-                                messages=[{"role": "system", "content": PROMPT + "\nJSON schema: " + json.dumps(SpecContent.model_json_schema())},
-                                          {"role": "user", "content": payload}], response_format={"type": "json_object"}, max_tokens=6500)
-                            content = SpecContent.model_validate_json(response.choices[0].message.content)
+                            messages = [{"role": "system", "content": PROMPT + "\nJSON schema: " + json.dumps(SpecContent.model_json_schema())},
+                                        {"role": "user", "content": payload}]
+                            for attempt in range(2):
+                                if attempt:
+                                    self.reserve()
+                                response = client.chat.completions.create(model=model_for(provider),
+                                    messages=messages, response_format={"type": "json_object"}, max_tokens=9000)
+                                raw = response.choices[0].message.content
+                                try:
+                                    content = SpecContent.model_validate_json(raw)
+                                    break
+                                except (ValueError, TypeError):
+                                    if attempt:
+                                        raise
+                                    messages.extend([
+                                        {"role": "assistant", "content": raw or ""},
+                                        {"role": "user", "content": "Ответ не соответствует JSON-схеме. Верни полный JSON по схеме; не добавляй неизвестные факты."},
+                                    ])
                         if content is None:
                             raise ValueError("No structured specification")
                         return SpecContent.model_validate(content), "live", provider, failures

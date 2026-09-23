@@ -24,6 +24,7 @@ def draft_view(record):
             "selected_idea_ids": spec.get("selected_idea_ids", []),
             "mode": spec.get("mode"), "provider": spec.get("provider"),
             "warnings": spec.get("warnings", []), "review": review_view(record),
+            "nvidia_review": review_view(record, 'nvidia_review'),
             "approved_at": spec.get("approved_at")}
 
 

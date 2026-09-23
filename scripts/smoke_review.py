@@ -54,11 +54,11 @@ def main():
         page.route('**/api/cards/*/review', lambda route: route.fulfill(status=503,
             content_type='application/json', body=json.dumps({'detail': 'Проверка недоступна'})))
         page.get_by_role('button', name='Проверить ещё раз', exact=True).click()
-        expect(page.locator('.bp-review-status')).to_contain_text('недоступна')
+        expect(page.locator('.bp-step-card .bp-review .bp-review-status')).to_contain_text('недоступна')
         expect(page.locator('#bp-f-data')).to_have_value('CSV из 20 синтетических вопросов доступен в учебном репозитории.')
         page.unroute('**/api/cards/*/review')
         page.get_by_role('button', name='Проверить ещё раз', exact=True).click()
-        expect(page.locator('.bp-review-status')).to_contain_text('не выявила замечаний')
+        expect(page.locator('.bp-step-card .bp-review .bp-review-status')).to_contain_text('не выявила замечаний')
         # Saved content is restored from the server; the browser stores only its ID.
         remembered = page.evaluate("localStorage.getItem('sana:last-business-card')")
         assert remembered and len(remembered) == 36
@@ -69,7 +69,7 @@ def main():
         page.get_by_role('button', name='Отметить все для подтверждения', exact=True).click()
         page.get_by_role('button', name='Подтвердить отмеченные', exact=True).click()
         expect(page.locator('.bp-total strong')).to_have_text('100')
-        expect(page.locator('.bp-review-status')).to_contain_text('не выявила замечаний')
+        expect(page.locator('.bp-step-card .bp-review .bp-review-status')).to_contain_text('не выявила замечаний')
         page.get_by_role('button', name='Опубликовать', exact=True).click()
         expect(page.locator('.catalog-detail h3')).to_have_text(values['title'])
         expect(page.locator('.catalog-review')).to_contain_text('не выявила замечаний')

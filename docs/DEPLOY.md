@@ -67,3 +67,15 @@ Digest: `sha256:4ba880a03fa16c5116324fd80238a7be54e30f2a8f9ac5f7b933e933e58bd348
 ## Образ со стресс-тестом карточки
 
 Готов и загружен: docker.io/denryyyyyyy/sana-hub:732032e307e5. Digest sha256:9f80c0045c332dc2ba406df2fba629cb153eb32bb4ac94873a7e1f982a165cf5. Включает PR #3, review и catalog_insights. Локально проверены запуск контейнера, API smoke, наличие review.py и отсутствие .env. Для AI-проверки на Render нужны существующие OPENAI_API_KEY, MOCK=0; при сбое FALLBACK_TO_MOCK=1 включает явно помеченные правила. На публичном сайте эта версия пока не подтверждена.
+
+## Образ после PR #4 и #5
+
+Готов и загружен: docker.io/denryyyyyyy/sana-hub:3f12d9b207d6. Digest: sha256:6c5572d30cacf82a3d9f95cc15b48c4a6c914209b013742266299c3ca6374a65. Включает сравнение условий отклика, утверждаемое ТЗ/PDF, восстановление карточки и приёмку этапа. Linux-контейнер прошёл API smoke и генерацию → утверждение → публикацию → скачивание двухстраничного PDF с проверкой кириллицы (MOCK=1). .env отсутствует. Обновление Render ещё не выполнено.
+
+## Настройки после миграции GPT-5.5/NVIDIA
+
+Для новой версии в Render → Environment: OPENAI_MODEL=gpt-5.5, OPENAI_REASONING_EFFORT=low, AI_TIMEOUT_SECONDS=45, SPEC_TIMEOUT_SECONDS=90, MOCK=0. Существующий OPENAI_API_KEY сохранить. NVIDIA_API_KEY пока оставить пустым; NVIDIA_MODEL=meta/llama-3.3-70b-instruct. Старое значение OPENAI_MODEL в Render переопределяет новый кодовый default: сменить его явно. Изменения локального .env не переносятся на Render.
+
+После получения NVIDIA_API_KEY добавить его на сервер и перезапустить/deploy. Код менять не нужно. До получения ключа функция второго мнения показывает недоступность в live; основной OpenAI продолжает работать. При MOCK=1 показываются локальные правила, а не реальный NVIDIA. Проверка конфигурации /health не доказывает успешный вызов. Для проверки после ключа: python scripts/check_ai.py --provider nvidia --workflow review; тесты extract и specification доступны тем же скриптом.
+
+Образ с GPT-5.5/NVIDIA загружен: docker.io/denryyyyyyy/sana-hub:3e53a8d6521d. Digest sha256:33a846da0b96a0b14683d6f8a3ea9ffdd643320db5570b358b632e3bb15a94fe. Проверены конфигурация GPT-5.5 в Linux, API smoke, отсутствие .env и HTTP503 без изменения карточки при отсутствующем NVIDIA-ключе в live. Render этим действием не обновлялся.

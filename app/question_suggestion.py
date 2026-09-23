@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import HTTPException
 
 from app.schemas import CardField, Model
+from app.ai_config import NVIDIA_BASE_URL, model_for, openai_options
 
 
 class FieldSelection(Model):
@@ -30,9 +31,9 @@ class QuestionSuggester:
         result = None
         if os.getenv('MOCK', '1') != '1':
             from openai import OpenAI
-            for provider, key_name, model_name, default in [
-                ('openai', 'OPENAI_API_KEY', 'OPENAI_MODEL', 'gpt-4.1-mini'),
-                ('nvidia', 'NVIDIA_API_KEY', 'NVIDIA_MODEL', 'meta/llama-3.3-70b-instruct'),
+            for provider, key_name in [
+                ('openai', 'OPENAI_API_KEY'),
+                ('nvidia', 'NVIDIA_API_KEY'),
             ]:
                 key = os.getenv(key_name)
                 if not key:
@@ -40,17 +41,17 @@ class QuestionSuggester:
                     continue
                 try:
                     self.reserve()
-                    options = {'api_key': key, 'timeout': float(os.getenv('AI_TIMEOUT_SECONDS', '12')), 'max_retries': 0}
+                    options = {'api_key': key, 'timeout': float(os.getenv('AI_TIMEOUT_SECONDS', '45')), 'max_retries': 0}
                     if provider == 'nvidia':
-                        options['base_url'] = 'https://integrate.api.nvidia.com/v1'
+                        options['base_url'] = NVIDIA_BASE_URL
                     payload = json.dumps({'question': question['text'], 'answer': answer['text']}, ensure_ascii=False)
                     with OpenAI(**options) as client:
                         if provider == 'openai':
-                            response = client.responses.parse(model=os.getenv(model_name, default), instructions=PROMPT,
-                                input=payload, text_format=FieldSelection, max_output_tokens=1000, store=False)
+                            response = client.responses.parse(**openai_options(), instructions=PROMPT,
+                                input=payload, text_format=FieldSelection, max_output_tokens=2000, store=False)
                             selection = FieldSelection.model_validate(response.output_parsed)
                         else:
-                            response = client.chat.completions.create(model=os.getenv(model_name, default),
+                            response = client.chat.completions.create(model=model_for(provider),
                                 messages=[{'role': 'system', 'content': PROMPT + '\nJSON schema: ' + json.dumps(FieldSelection.model_json_schema())},
                                           {'role': 'user', 'content': payload}], response_format={'type': 'json_object'}, max_tokens=1000)
                             selection = FieldSelection.model_validate_json(response.choices[0].message.content)
@@ -69,6 +70,7 @@ class QuestionSuggester:
             result = {'field': field, 'text': answer['text'], 'mode': 'mock', 'provider': 'deterministic-template'}
         event = {'at': datetime.now(timezone.utc).isoformat(), 'workflow': 'question_field',
                  'mode': result['mode'] if result else 'unavailable', 'provider': result['provider'] if result else 'none',
+                 'model': model_for(result['provider']) if result else None,
                  'failures': failures, 'elapsed_ms': round((time.monotonic() - started) * 1000)}
         try:
             path = Path(os.getenv('LLM_LOG_PATH', 'logs/llm_calls.jsonl'))

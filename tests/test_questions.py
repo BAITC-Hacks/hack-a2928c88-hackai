@@ -264,6 +264,12 @@ def test_notifications_go_only_to_owner_author_and_active_subscribers(qa):
 
 
 def test_transfer_requires_owner_and_fresh_card_and_answer(qa):
+    from app.review import review_view
+    with qa.store.transaction() as db:
+        reviewed = Store.get(db, 'card', 'published')
+        for key in ('review', 'nvidia_review'):
+            reviewed[key] = {'status': 'complete', 'revision': 1, 'issues': []}
+        Store.put(db, 'card', 'published', reviewed)
     question = qa.create()
     answered = qa.answer(question)
     base = f"/api/questions/{question['id']}"
@@ -284,6 +290,7 @@ def test_transfer_requires_owner_and_fresh_card_and_answer(qa):
     assert card["card"]["data"] == suggestion["text"]
     assert card["snapshot"]["data"] == "Исходные данные подтверждены"
     assert card["specification"]["status"] == "stale" and card["specification"]["approved_at"] is None
+    assert all(review_view(card, key)['status'] == 'stale' for key in ('review', 'nvidia_review'))
     assert card["evidence"]["data"]["source_id"].startswith("answer:")
     assert qa.call("POST", base + "/apply-field", OWNER, body).status_code == 409
 

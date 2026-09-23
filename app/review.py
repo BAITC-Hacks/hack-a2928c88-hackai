@@ -5,6 +5,7 @@ import time
 
 from pydantic import Field
 from app.schemas import Model, CardContent, CardField, NonEmpty
+from app.ai_config import model_for, openai_options, NVIDIA_BASE_URL
 
 
 class ReviewIssue(Model):
@@ -79,46 +80,73 @@ class CardReviewer:
         self.budget = budget
 
     def review(self, fields):
+        return self._review(fields, ('openai', 'nvidia'))
+
+    def review_nvidia(self, fields):
+        # A separate opinion sees only source fields, never the first model's answer.
+        return self._review(fields, ('nvidia',), strict=True)
+
+    def _call(self, fields, provider):
+        from openai import OpenAI
+        key = os.getenv('OPENAI_API_KEY' if provider == 'openai' else 'NVIDIA_API_KEY')
+        if not key:
+            raise RuntimeError('not_configured')
+        kwargs = dict(api_key=key, max_retries=0, timeout=float(os.getenv('AI_TIMEOUT_SECONDS', '45')))
+        if provider == 'nvidia':
+            kwargs['base_url'] = NVIDIA_BASE_URL
+        self.budget.reserve()
+        with OpenAI(**kwargs) as client:
+            payload = json.dumps(fields, ensure_ascii=False)
+            if provider == 'openai':
+                response = client.responses.parse(**openai_options(), instructions=PROMPT,
+                    input=payload, text_format=ReviewResult, max_output_tokens=4000, store=False)
+                return validate_review(response.output_parsed, fields)
+            messages = [dict(role='system', content=PROMPT + '\nJSON schema: ' + json.dumps(ReviewResult.model_json_schema())),
+                        dict(role='user', content=payload)]
+            for attempt in range(2):
+                if attempt:
+                    self.budget.reserve()
+                response = client.chat.completions.create(model=model_for('nvidia'), messages=messages,
+                    response_format={'type':'json_object'}, max_tokens=3000)
+                raw = response.choices[0].message.content
+                try:
+                    return validate_review(ReviewResult.model_validate_json(raw), fields)
+                except (ValueError, TypeError):
+                    if attempt:
+                        raise
+                    messages.extend([dict(role='assistant', content=raw or ''), dict(role='user',
+                        content='Повтори JSON по схеме. Цитаты только дословно из указанного поля, без новых фактов; не более одного замечания на поле.')])
+
+    def _review(self, fields, providers, strict=False):
         fields = CardContent.model_validate(fields).model_dump()
         if sum(map(len, fields.values())) > 30000:
             raise ValueError('Review input too long')
         started = time.monotonic()
         failures = []
         rules = rule_issues(fields)
+        workflow = 'nvidia-review' if strict else 'card-review'
         if os.getenv('MOCK', '1') != '1':
-            try:
-                if not os.getenv('OPENAI_API_KEY'):
-                    raise RuntimeError('not_configured')
-                from openai import OpenAI
-                self.budget.reserve()
-                with OpenAI(api_key=os.environ['OPENAI_API_KEY'], max_retries=0,
-                            timeout=float(os.getenv('AI_TIMEOUT_SECONDS', '12'))) as client:
-                    response = client.responses.parse(model=os.getenv('OPENAI_MODEL', 'gpt-4.1-mini'),
-                        instructions=PROMPT, input=json.dumps(fields, ensure_ascii=False),
-                        text_format=ReviewResult, max_output_tokens=2000, store=False)
-                    result = validate_review(response.output_parsed, fields)
-                ai_issues = [dict(**issue.model_dump(), kind='ai') for issue in result.issues
-                             if issue.field not in {r['field'] for r in rules}]
-                # Empty fields are already visible in the editor. Reserve room for
-                # semantic findings instead of letting three missing fields hide AI.
-                # Keep at least one concrete rule finding when there is one, while
-                # giving a semantic contradiction a slot even on a sparse card.
-                ordered = (ai_issues[:1] + rules[:1] + ai_issues[1:] + rules[1:])
-                value = dict(status='complete', mode='live', provider='openai',
-                             issues=ordered[:3])
-                self.budget.log_result((None, 'live', 'openai', failures), started, 'card-review')
-                return value
-            except Exception as exc:
-                failures.append('openai:' + type(exc).__name__)
-                if os.getenv('FALLBACK_TO_MOCK', '1') != '1':
-                    self.budget.log_result((None, 'unavailable', 'none', failures), started, 'card-review')
-                    raise RuntimeError('Review unavailable') from exc
-        self.budget.log_result((None, 'mock', 'mock', failures), started, 'card-review')
-        return dict(status='complete', mode='mock', provider='mock', issues=rules)
+            for provider in providers:
+                try:
+                    result = self._call(fields, provider)
+                    ai_issues = [dict(**issue.model_dump(), kind='ai') for issue in result.issues
+                                 if issue.field not in {r['field'] for r in rules}]
+                    # Preserve both a semantic finding and a deterministic missing field.
+                    ordered = ai_issues[:1] + rules[:1] + ai_issues[1:] + rules[1:]
+                    self.budget.log_result((None, 'live', provider, failures), started, workflow)
+                    return dict(status='complete', mode='live', provider=provider,
+                                model=model_for(provider), issues=ordered[:3])
+                except Exception as exc:
+                    failures.append(provider + ':' + type(exc).__name__)
+            if strict or os.getenv('FALLBACK_TO_MOCK', '1') != '1':
+                self.budget.log_result((None, 'unavailable', 'none', failures), started, workflow)
+                raise RuntimeError('Review unavailable')
+        self.budget.log_result((None, 'mock', 'mock', failures), started, workflow)
+        return dict(status='complete', mode='mock', provider='mock', model=None, issues=rules)
 
 
-def review_view(record):
-    review = record.get('review')
+def review_view(record, key='review'):
+    review = record.get(key)
     if not review:
         return dict(status='not_run', revision=record['revision'], mode=None, provider=None, issues=[])
     return {**review, 'status': review['status'] if review['revision'] == record['revision'] else 'stale'}
@@ -126,5 +154,6 @@ def review_view(record):
 
 def carry_review(record, old_revision):
     """Confirmation/publication changes revision but not the reviewed text."""
-    if record.get('review', {}).get('revision') == old_revision:
-        record['review'] = {**record['review'], 'revision': record['revision']}
+    for key in ('review', 'nvidia_review'):
+        if record.get(key, {}).get('revision') == old_revision:
+            record[key] = {**record[key], 'revision': record['revision']}

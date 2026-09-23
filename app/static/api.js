@@ -49,6 +49,7 @@ export const api = {
   approveSpecification: cardId => request(`/cards/${id(cardId)}/specification/approve`, {method:'POST', role:'business', cardId}),
   downloadSpecificationDraft: cardId => request(`/cards/${id(cardId)}/specification/draft.pdf`, {role:'business', cardId, blob:true}),
   reviewCard: cardId => request(`/cards/${id(cardId)}/review`, {method:'POST', role:'business', cardId}),
+  reviewCardNvidia: cardId => request(`/cards/${id(cardId)}/review/nvidia`, {method:'POST', role:'business', cardId}),
   updateCard: (cardId, body) => request(`/cards/${id(cardId)}`, {method:'PATCH', body, role:'business', cardId}),
   confirmCard: (cardId, body) => request(`/cards/${id(cardId)}/confirm`, {method:'POST', body, role:'business', cardId}),
   publishCard: cardId => request(`/cards/${id(cardId)}/publish`, {method:'POST', role:'business', cardId}),

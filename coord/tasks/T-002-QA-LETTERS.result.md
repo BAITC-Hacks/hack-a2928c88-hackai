@@ -19,7 +19,7 @@ UI: new community/questions/project-letters modules and styles; small integratio
 
 ## Verification
 
-- Full pytest run: 138 passed before final public-profile checks were added; final total is recorded in the PR.
+- Full pytest run after integration with `origin/main` 097c9d6: 156 passed. The only warning is an upstream Starlette/httpx deprecation.
 - Q&A real API browser smoke: passed, including isolated drafts, owner answer/edit, reconfirmation transfer, duplicate source, notifications and Kazakh/mobile.
 - Letters real API browser smoke: passed, including source edits, role/version race protection, PDF download, all verification statuses, complaint, consent, mobile and delayed response isolation after identity switch.
 - Existing `scripts/smoke_e2e.py --mode mock`: passed (readiness 0 → 100 → 80 → 100, manual selection, milestone without regression).
@@ -30,3 +30,5 @@ UI: new community/questions/project-letters modules and styles; small integratio
 Set `APP_PUBLIC_URL` to the actual HTTPS origin before issuing shared PDFs. Persist and back up SQLite: the current Render configuration is ephemeral. Notifications remain inside the application. Templates are translated; original business comments remain verbatim. Integration with real identity provisioning is required before production use. See `docs/COMMUNITY.md` for reproduction and acceptance mapping.
 
 Work is prepared on the separate branch `team/questions-recommendations`; merging and deployment are separate actions.
+
+The branch incorporates the team's GPT-5.5/NVIDIA review changes. The new field selector uses the shared AI configuration. Answer transfer makes both prior reviews stale while preserving the published snapshot.
