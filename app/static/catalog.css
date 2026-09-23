@@ -17,6 +17,11 @@
 .catalog-panel .catalog-eyebrow { font-size: 12px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--catalog-muted); }
 .catalog-panel .catalog-muted { color: var(--catalog-muted); font-size: 14px; }
 .catalog-panel .catalog-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-top: 24px; }
+.catalog-panel .catalog-search { margin-top: 16px; }
+.catalog-panel .catalog-pagination { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.catalog-panel .catalog-page-number { font-size: 14px; }
+.catalog-panel .catalog-navigation-warning:not(:empty) { padding: 16px; margin-bottom: 16px; background: #fff0cc; border-radius: 10px; }
+.catalog-panel .catalog-navigation-warning button { margin: 4px 8px 4px 0; }
 .catalog-panel .catalog-field { display: grid; gap: 6px; flex: 1; min-width: 180px; font-size: 14px; font-weight: 650; }
 .catalog-panel input, .catalog-panel select, .catalog-panel textarea {
   width: 100%; min-height: 44px; border: 1px solid #a1b5aa; border-radius: 9px;

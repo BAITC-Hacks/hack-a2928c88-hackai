@@ -68,10 +68,19 @@ export function mountCatalog(root, api) {
   }
   const apply = element('button', 'Показать задачи');
   apply.type = 'submit';
+  const search = element('input');
+  search.type = 'search';
+  search.placeholder = 'Название или описание';
+  search.addEventListener('input', () => {
+    page = 1;
+    renderList();
+  });
   const reset = button('Сбросить фильтры', () => {
     if (busy) return;
     industry.value = '';
     level.value = '';
+    search.value = '';
+    page = 1;
     void refresh();
   });
   filters.append(labeled('Отрасль', industry), labeled('Готовность задачи', level), apply, reset);
@@ -84,8 +93,16 @@ export function mountCatalog(root, api) {
   const detail = element('section', undefined, 'catalog-detail');
   detail.setAttribute('aria-label', 'Карточка задачи');
   layout.append(list, detail);
-  panel.append(heading, filters, notice, layout);
+  const searchField = labeled('Поиск по задачам', search);
+  searchField.classList.add('catalog-search');
+  const navigationWarning = element('div', undefined, 'catalog-navigation-warning');
+  panel.append(heading, filters, searchField, notice, navigationWarning, layout);
   let cards = [], teams = [], selectedId = null, proposals = [];
+  let selectedCard = null;
+  let proposalDraft = {};
+  let page = 1;
+  let appliedFilters = { industry: '', level: '' };
+  const pageSize = 20;
   let busy = false;
 
   function say(text, error = false) {
@@ -123,10 +140,17 @@ export function mountCatalog(root, api) {
   }
 
   function renderList() {
-    list.replaceChildren(element('p', `Найдено задач: ${cards.length}`, 'catalog-muted'));
-    if (!cards.length) list.append(element('p', 'Задач пока нет. Попробуйте изменить фильтры.'));
+    const query = search.value.trim().toLocaleLowerCase();
+    const found = cards.filter(card => ['title', 'context', 'need', 'expected_result']
+      .some(key => String(card[key] || '').toLocaleLowerCase().includes(query)));
+    const pages = Math.max(1, Math.ceil(found.length / pageSize));
+    page = Math.min(page, pages);
+    const count = element('p', `Найдено задач: ${found.length}`, 'catalog-muted');
+    count.setAttribute('role', 'status');
+    list.replaceChildren(count);
+    if (!found.length) list.append(element('p', 'Задач пока нет. Измените поиск или сбросьте фильтры.'));
     // The adapter owns ranking. Preserve its order exactly.
-    for (const card of cards) {
+    for (const card of found.slice((page - 1) * pageSize, page * pageSize)) {
       const item = element('article', undefined, 'catalog-card');
       item.classList.toggle('catalog-active', card.id === selectedId);
       const open = button(card.id === selectedId ? 'Карточка открыта' : 'Посмотреть задачу', () => openCard(card.id));
@@ -136,12 +160,48 @@ export function mountCatalog(root, api) {
         element('p', card.need || card.context || 'Описание пока не заполнено.'), open);
       list.append(item);
     }
+    const pager = element('nav', undefined, 'catalog-pagination');
+    pager.setAttribute('aria-label', 'Страницы каталога');
+    const move = step => {
+      if (busy) return;
+      page += step;
+      renderList();
+      list.querySelector('.catalog-page-number')?.focus();
+    };
+    const previous = button('Назад', () => move(-1));
+    const next = button('Далее', () => move(1));
+    previous.disabled = page === 1;
+    next.disabled = page === pages;
+    const number = element('span', `Страница ${page} из ${pages}`, 'catalog-page-number');
+    number.tabIndex = -1;
+    pager.append(previous, number, next);
+    list.append(pager);
   }
 
   function openCard(id) {
+    if (busy || id === selectedId) return;
+    if (Object.values(proposalDraft).some(value => String(value).length > 0)) {
+      const warning = element('p', 'В отклике есть несохранённые данные. При открытии другой задачи они будут потеряны.');
+      const cancel = button('Остаться в текущей карточке', () => {
+        navigationWarning.replaceChildren();
+        detail.querySelector('h3')?.focus();
+      });
+      navigationWarning.setAttribute('role', 'alert');
+      navigationWarning.replaceChildren(warning, cancel,
+        button('Открыть другую и удалить черновик', () => loadCard(id)));
+      cancel.focus();
+      return;
+    }
+    return loadCard(id);
+  }
+
+  function loadCard(id) {
     return run('Загружаем отклики…', async () => {
       const loaded = await api.listProposals(id);
       selectedId = id;
+      selectedCard = cards.find(item => item.id === id);
+      proposalDraft = {};
+      navigationWarning.replaceChildren();
       proposals = loaded;
       renderList();
       renderDetail();
@@ -152,7 +212,7 @@ export function mountCatalog(root, api) {
 
   function renderDetail() {
     detail.replaceChildren();
-    const card = cards.find(item => item.id === selectedId);
+    const card = selectedCard;
     if (!card) {
       detail.append(element('p', 'Выберите задачу, чтобы посмотреть подробности и отправить отклик.', 'catalog-empty'));
       return;
@@ -187,6 +247,7 @@ export function mountCatalog(root, api) {
     form.noValidate = true;
     form.append(element('h4', 'Предложить решение'));
     const team = element('select');
+    team.name = 'team_id';
     team.required = true;
     const placeholder = element('option', teams.length ? 'Выберите учебную команду' : 'Нет доступных команд');
     placeholder.value = '';
@@ -197,13 +258,16 @@ export function mountCatalog(root, api) {
       team.append(option);
     }
     const teamInfo = element('p', '', 'catalog-muted');
-    team.addEventListener('change', () => {
+    team.value = proposalDraft.team_id || '';
+    const showTeam = () => {
       const selected = teams.find(item => String(item.id) === team.value);
       teamInfo.textContent = selected ? ['interests', 'skills', 'technologies'].map((key, i) => {
         const value = selected[key];
         return `${['Интересы', 'Навыки', 'Технологии'][i]}: ${Array.isArray(value) ? value.join(', ') : value || 'не указаны'}`;
       }).join(' · ') : '';
-    });
+    };
+    team.addEventListener('change', showTeam);
+    showTeam();
     form.append(labeled('Учебная команда', team), teamInfo);
     const inputs = {};
     for (const [key, label, tag] of [
@@ -212,6 +276,7 @@ export function mountCatalog(root, api) {
     ]) {
       const input = element(tag);
       input.name = key;
+      input.value = proposalDraft[key] || '';
       input.required = true;
       if (tag === 'textarea') input.rows = 3;
       if (key === 'prototype_url') { input.type = 'url'; input.placeholder = 'https://'; }
@@ -241,6 +306,12 @@ export function mountCatalog(root, api) {
     submit.type = 'submit';
     submit.disabled = !teams.length;
     form.append(submit);
+    const saveDraft = () => {
+      proposalDraft = { team_id: team.value,
+        ...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value])) };
+    };
+    form.addEventListener('input', saveDraft);
+    form.addEventListener('change', saveDraft);
     if (!teams.length) form.append(element('p', 'Добавьте команду и обновите каталог, чтобы отправить отклик.'));
     form.addEventListener('submit', event => {
       event.preventDefault();
@@ -257,6 +328,8 @@ export function mountCatalog(root, api) {
           team_id: selected.id, ...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])),
         });
         proposals = [...proposals.filter(item => item.id !== proposal.id), proposal];
+        proposalDraft = {};
+        navigationWarning.replaceChildren();
         renderDetail();
         say('Отклик отправлен и добавлен в список для бизнеса.');
       });
@@ -315,18 +388,20 @@ export function mountCatalog(root, api) {
       const [allCards, loadedTeams] = await Promise.all([api.listCards({}), api.listTeams()]);
       const industries = [...new Set(allCards.map(card => card.industry).filter(value => typeof value === 'string' && value !== ''))];
       const requested = { industry: industries.includes(industry.value) ? industry.value : '', level: level.value };
+      const industryRemoved = Boolean(industry.value && !requested.industry);
       const loadedCards = requested.industry || requested.level ? await api.listCards(requested) : allCards;
       const published = loadedCards.filter(card => card.published);
-      const nextId = published.some(card => card.id === selectedId) ? selectedId : null;
-      const loadedProposals = nextId !== null ? await api.listProposals(nextId) : [];
+      const loadedProposals = selectedId !== null ? await api.listProposals(selectedId) : [];
       cards = published;
       teams = loadedTeams;
-      selectedId = nextId;
+      selectedCard = allCards.find(card => card.id === selectedId) || selectedCard;
       proposals = loadedProposals;
+      if (requested.industry !== appliedFilters.industry || requested.level !== appliedFilters.level) page = 1;
+      appliedFilters = requested;
       setIndustries(industries, requested.industry);
       renderList();
       renderDetail();
-      say(`Каталог обновлён. Опубликованных задач: ${cards.length}.`);
+      say(`${industryRemoved ? 'Выбранная отрасль исчезла; фильтр сброшен. ' : ''}Каталог обновлён. Опубликованных задач: ${cards.length}.`);
     });
   }
   filters.addEventListener('submit', event => { event.preventDefault(); void refresh(); });
