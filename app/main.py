@@ -1,6 +1,9 @@
 """Transactional demo API. Demo roles are controls, not authentication."""
 import os
 import json
+import asyncio
+import logging
+from contextlib import suppress
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,6 +23,10 @@ from app.schemas import Model, Draft, TaskCard, CardContent, CardField, Proposal
 from app.store import Store
 from app.specification import SpecGenerator, spec_state, reviewed_document
 from app.spec_routes import install_spec_routes
+from app.community import register_community, seed_community, deliver_notifications
+from app.questions import register_questions
+from app.question_suggestion import QuestionSuggester
+from app.project_letters import register_project_letters
 from app.ai_config import model_for
 
 load_dotenv()
@@ -142,11 +149,29 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
         should_seed = seed_demo if seed_demo is not None else os.getenv("SEED_DEMO", "1") == "1"
         if should_seed:
             seed(store)
-        yield
+        seed_community(store)
+        async def notification_loop():
+            while True:
+                try:
+                    await asyncio.to_thread(deliver_notifications, store)
+                except Exception:
+                    logging.getLogger(__name__).exception('Notification delivery failed; will retry')
+                await asyncio.sleep(60)
+        worker = asyncio.create_task(notification_loop())
+        try:
+            yield
+        finally:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
 
     app = FastAPI(title="Sana Hub", version="0.2.0", lifespan=lifespan)
     app.state.store = store
     install_spec_routes(app, store, spec_ai, business, require, check_revision)
+    community = register_community(app, store, require)
+    register_questions(app, store, require, **community,
+                       suggest_field=QuestionSuggester(ai.reserve if hasattr(ai, 'reserve') else Extractor().reserve))
+    register_project_letters(app, store, require, **community)
 
     @app.get("/health")
     def health():

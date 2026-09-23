@@ -1,5 +1,7 @@
 // T-002: каталог для команд и решения бизнеса. Порядок и баллы приходят из API.
 import {specificationPreview} from './specification.js';
+import {mountQuestions} from './questions.js';
+import {community} from './community.js';
 const LEVELS = { draft: 'Черновик', working: 'Рабочая', ready: 'Готовая', priority: 'Приоритетная' };
 const FIELDS = {
   context: 'Контекст', need: 'Задача', users: 'Пользователи', data: 'Данные',
@@ -210,6 +212,23 @@ export function mountCatalog(root, api) {
     pinned: null, showAllIndustries: false,
   };
   let busy = false;
+  let questionsPanel = null;
+  let questionCount = null;
+  const questionsLabel = count => `${community.language === 'kk' ? 'Сұрақтар' : 'Вопросы'}${count == null ? '' : ` (${count})`}`;
+  async function refreshQuestionCount() {
+    const cardId = state.selected?.id;
+    const tab = detail.querySelector('[data-tab="questions"]');
+    if (!cardId || !tab) return;
+    tab.textContent = questionsLabel(questionCount);
+    if (!community.actor || state.tab === 'questions') return;
+    try {
+      const value = await community.request(`/cards/${encodeURIComponent(cardId)}/questions?limit=1`);
+      if (state.selected?.id === cardId && tab.isConnected) {
+        questionCount = value.total; tab.textContent = questionsLabel(questionCount);
+      }
+    } catch { /* Opening Questions provides the full error and retry controls. */ }
+  }
+  addEventListener('community-change', () => { questionCount = null; void refreshQuestionCount(); });
   // Drafts belong to tasks, not to the current tab, page, or team persona.
   const drafts = new Map();
   const conditionChecks = new Map();
@@ -440,6 +459,7 @@ export function mountCatalog(root, api) {
     return run('Загружаем отклики…', async () => {
       const loaded = await api.listProposals(card.id);
       state.selected = card;
+      questionCount = null;
       state.proposals = loaded;
       state.tab = 'task';
       renderList();
@@ -479,6 +499,8 @@ export function mountCatalog(root, api) {
   }
 
   function renderDetail() {
+    questionsPanel?.destroy();
+    questionsPanel = null;
     const card = state.selected;
     if (!card) { detail.replaceChildren(renderEmptyDetail()); return; }
     const top = element('div', undefined, 'catalog-detail-head');
@@ -499,7 +521,7 @@ export function mountCatalog(root, api) {
 
     const tabs = element('div', undefined, 'tabs catalog-tabs');
     tabs.setAttribute('role', 'tablist');
-    const tabDefs = [['task', 'Задача'], ['apply', 'Откликнуться'], ['proposals', 'Отклики']];
+    const tabDefs = [['task', 'Задача'], ['apply', 'Откликнуться'], ['proposals', 'Отклики'], ['questions', questionsLabel(questionCount)]];
     for (const [key, text] of tabDefs) {
       const tab = button(text, () => { state.tab = key; renderDetail(); detail.querySelector(`[data-tab="${key}"]`)?.focus(); });
       tab.dataset.tab = key;
@@ -512,8 +534,14 @@ export function mountCatalog(root, api) {
     body.setAttribute('role', 'tabpanel');
     if (state.tab === 'task') body.append(...taskPanel(card));
     else if (state.tab === 'apply') body.append(proposalForm(card));
+    else if (state.tab === 'questions') questionsPanel = mountQuestions(body, card, {onCount(count) {
+      questionCount = count;
+      const tab = tabs.querySelector('[data-tab="questions"]');
+      if (tab) tab.textContent = questionsLabel(count);
+    }});
     else body.append(proposalSection(card));
     detail.replaceChildren(top, tabs, body);
+    void refreshQuestionCount();
   }
 
   function taskPanel(card) {
@@ -841,6 +869,9 @@ export function mountCatalog(root, api) {
         })));
       }
       decide.append(actions);
+      if (proposal.status === 'selected') decide.append(button('Проект и рекомендательное письмо', () => {
+        dispatchEvent(new CustomEvent('community-open-project', {detail:proposal.id}));
+      }, 'btn-quiet'));
       item.append(who, what, decide, conditionsHistory(proposal));
       grid.append(item);
     }

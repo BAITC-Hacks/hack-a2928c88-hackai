@@ -1,0 +1,17 @@
+.community-workspace, .community-questions { display: grid; gap: 16px; }
+.community-workspace .community-header { display: grid; grid-template-columns: minmax(0,1fr) minmax(160px,.5fr); gap: 16px; }
+.community-workspace .community-header h2, .community-workspace .community-demo, .community-workspace .community-notice { grid-column: 1 / -1; }
+.community-workspace .community-demo { background: var(--warn-soft); padding: 12px; border-radius: var(--r-md); }
+.community-field { display: grid; gap: 6px; font-size: 13px; }
+.community-workspace input, .community-workspace select, .community-workspace textarea, .community-questions input, .community-questions select, .community-questions textarea { width: 100%; min-height: 40px; padding: 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; }
+.community-workspace button, .community-questions button { font: inherit; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--accent); cursor: pointer; }
+.community-workspace button:disabled, .community-questions button:disabled { opacity: .5; cursor: wait; }
+.community-workspace .community-inbox, .community-question, .community-ask { padding: 16px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-md); display: grid; gap: 10px; }
+.community-notification { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.community-error { color: var(--danger); }
+.community-question p, .community-question blockquote { white-space: pre-wrap; overflow-wrap: anywhere; }
+.community-question blockquote { margin: 0; padding: 12px; border-left: 3px solid var(--bright); background: var(--soft); }
+.community-question .community-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.community-questions form { display: grid; gap: 10px; }
+.community-questions .community-question-meta { font-size: 12px; color: var(--ink-2); }
+@media(max-width:760px) { .community-workspace .community-header { grid-template-columns: 1fr; } }

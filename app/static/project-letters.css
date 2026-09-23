@@ -1,0 +1,84 @@
+.project-letters { color: var(--ink); display: grid; gap: 20px; min-width: 0; }
+.project-letters *, .project-letters *::before, .project-letters *::after { box-sizing: border-box; }
+.project-letters .pl-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.project-letters .pl-head h2 { margin-bottom: 10px; }
+.project-letters .pl-help { color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+.project-letters .pl-workspace { display: grid; grid-template-columns: minmax(210px, .75fr) minmax(0, 2.25fr); gap: 20px; align-items: start; }
+.project-letters .pl-detail { display: grid; gap: 18px; min-width: 0; }
+.project-letters .pl-section { min-width: 0; padding: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); display: grid; gap: 16px; align-content: start; }
+.project-letters .pl-section > h3 { line-height: 1.4; }
+.project-letters .pl-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); color: var(--ink); padding: 10px 16px; font: 600 14px/1.45 var(--f-body); cursor: pointer; text-align: center; text-decoration: none; overflow-wrap: anywhere; }
+.project-letters .pl-button:hover:not(:disabled) { background: var(--sunk); border-color: var(--ink-2); }
+.project-letters .pl-primary { background: var(--accent); color: white; border-color: var(--accent); }
+.project-letters .pl-primary:hover:not(:disabled) { background: var(--accent-hover); color: white; border-color: var(--accent-hover); }
+.project-letters .pl-danger { color: var(--danger); border-color: var(--danger); }
+.project-letters .pl-danger:hover:not(:disabled) { background: var(--danger-soft); }
+.project-letters .pl-button:disabled { cursor: not-allowed; opacity: .55; }
+.project-letters[aria-busy=true] .pl-button:disabled { cursor: progress; }
+.project-letters .pl-projects { padding: 16px; }
+.project-letters .pl-project-choice { display: grid; justify-content: start; text-align: left; gap: 8px; padding: 14px; width: 100%; }
+.project-letters .pl-project-choice[aria-pressed=true] { background: var(--soft); border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.project-letters .pl-badge { display: inline-flex; justify-self: start; padding: 4px 9px; background: var(--sunk); color: var(--ink-2); font: 600 11px/1.5 var(--f-body); border-radius: 999px; width: fit-content; }
+.project-letters .pl-badge-completed, .project-letters .pl-badge-issued, .project-letters .pl-badge-valid { color: var(--accent); background: var(--soft); }
+.project-letters .pl-badge-revoked { color: var(--danger); background: var(--danger-soft); }
+.project-letters .pl-badge-closed_early, .project-letters .pl-badge-replaced { color: var(--warn); background: var(--warn-soft); }
+.project-letters .pl-status { padding: 12px 16px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--soft); color: var(--accent); overflow-wrap: anywhere; }
+.project-letters .pl-status.pl-error { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+.project-letters .pl-empty { padding: 18px; border: 1px dashed var(--line-strong); border-radius: var(--r-md); color: var(--ink-2); line-height: 1.6; }
+.project-letters .pl-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 20px; margin: 0; font-size: 13px; }
+.project-letters .pl-meta dt { color: var(--ink-2); }
+.project-letters .pl-meta dd { margin: 0; overflow-wrap: anywhere; }
+.project-letters .pl-form { display: grid; gap: 18px; min-width: 0; }
+.project-letters .pl-form > .pl-button { justify-self: start; }
+.project-letters .pl-field { display: grid; gap: 7px; min-width: 0; font-size: 14px; }
+.project-letters .pl-field > span:first-child { font-weight: 600; }
+.project-letters .pl-field input, .project-letters .pl-field textarea, .project-letters select { min-width: 0; width: 100%; font-size: 15px; }
+.project-letters .pl-check { display: flex; align-items: flex-start; gap: 10px; min-height: 36px; padding: 6px 0; font-size: 14px; line-height: 1.5; cursor: pointer; }
+.project-letters .pl-check input { flex: 0 0 18px; margin-top: 2px; }
+.project-letters .pl-check span { overflow-wrap: anywhere; }
+.project-letters .pl-member-edit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 1fr); gap: 10px 20px; padding-bottom: 15px; border-bottom: 1px solid var(--line); align-items: center; }
+.project-letters .pl-member-edit > .pl-help { grid-column: 1 / -1; }
+.project-letters .pl-members { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.project-letters .pl-members li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.project-letters .pl-members .pl-help { grid-column: 1 / -1; }
+.project-letters .pl-choices { border: 0; margin: 0; padding: 0; min-width: 0; }
+.project-letters .pl-choices legend { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.project-letters .pl-callout { background: var(--soft); color: var(--ink); border-left: 3px solid var(--accent); padding: 14px 16px; font-size: 13px; line-height: 1.6; }
+.project-letters .pl-question { margin: 0; padding: 20px 0 6px; min-width: 0; border: 0; border-top: 1px solid var(--line); display: grid; gap: 14px; }
+.project-letters .pl-question legend { font-weight: 600; padding: 0 6px 0 0; font-size: 15px; line-height: 1.5; max-width: 100%; }
+.project-letters .pl-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
+.project-letters .pl-counter { color: var(--ink-2); font-size: 11px; font-family: var(--f-mono); justify-self: end; }
+.project-letters .pl-inline-error { color: var(--danger); font-size: 13px; }
+.project-letters .pl-preview { border-color: var(--accent); scroll-margin-top: 30px; }
+.project-letters .pl-letter-body { padding: 20px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); display: grid; gap: 8px; }
+.project-letters .pl-letter-body p, .project-letters .pl-letter-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; }
+.project-letters .pl-sentence { appearance: none; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; padding: 6px 8px; margin: 0 -8px; text-align: left; font: inherit; color: var(--ink); line-height: 1.75; cursor: pointer; white-space: pre-wrap; overflow-wrap: anywhere; }
+.project-letters .pl-sentence:hover:not(:disabled) { background: var(--soft); border-color: var(--accent); }
+.project-letters .pl-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.project-letters .pl-letter-entry, .project-letters .pl-copy { display: grid; min-width: 0; gap: 14px; border: 1px solid var(--line); border-radius: var(--r-md); padding: 18px; }
+.project-letters .pl-letter-entry + .pl-letter-entry { margin-top: 0; }
+.project-letters .pl-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.project-letters details { min-width: 0; font-size: 14px; }
+.project-letters summary { cursor: pointer; color: var(--accent); min-height: 36px; padding: 6px 0; font-weight: 600; }
+.project-letters details[open] > .pl-help, .project-letters details[open] > .pl-form, .project-letters details[open] > .pl-letter-text { margin-top: 12px; }
+.project-letters .pl-revoke summary { color: var(--danger); }
+.project-letters :is(button, input, select, textarea, summary, a):focus-visible { outline: 3px solid var(--bright); outline-offset: 3px; }
+@media (max-width: 860px) {
+  .project-letters .pl-workspace { grid-template-columns: minmax(0, 1fr); }
+  .project-letters .pl-projects { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-letters .pl-projects > h3, .project-letters .pl-projects > .pl-empty { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .project-letters .pl-head { flex-direction: column; gap: 12px; }
+  .project-letters .pl-section { padding: 16px; }
+  .project-letters .pl-projects, .project-letters .pl-options, .project-letters .pl-member-edit { grid-template-columns: minmax(0, 1fr); }
+  .project-letters .pl-meta { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .project-letters .pl-meta dd { margin-bottom: 8px; }
+  .project-letters .pl-actions, .project-letters .pl-form > .pl-button { width: 100%; }
+  .project-letters .pl-actions .pl-button { flex: 1 1 100%; }
+  .project-letters .pl-letter-body { padding: 14px; }
+  .project-letters .pl-members li { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-letters * { scroll-behavior: auto !important; transition: none !important; }
+}
