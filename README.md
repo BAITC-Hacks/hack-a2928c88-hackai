@@ -173,6 +173,8 @@ Copy-Item .env.example .env   # только при первом запуске
 
 **Docker:**
 
+Готовый проверенный образ с GPT-5.5 и вторым мнением: `docker.io/denryyyyyyy/sana-hub:3e53a8d6521d`. На Render обновить Image URL и явно задать `OPENAI_MODEL=gpt-5.5`, `OPENAI_REASONING_EFFORT=low`, `AI_TIMEOUT_SECONDS=45`; `NVIDIA_API_KEY` пока пуст. Установка этого образа на публичном сервисе ещё не подтверждена.
+
 ```bash
 docker build -t sana-hub .
 docker run --rm -p 8000:8000 -v sana-data:/data -e MOCK=1 sana-hub
@@ -188,6 +190,8 @@ docker run --rm -p 8000:8000 -v sana-data:/data -e MOCK=1 sana-hub
 </details>
 
 ## Тестовые сценарии
+
+Для ручной приёмки: [16 сценариев тестировщика](docs/TESTER-SCENARIOS.md), включая второй AI, отсутствие ключа, fallback и сохранность ввода. Текущая версия: 94 pytest проходят; реальные локальные запросы GPT-5.5 проверены для вопросов/цитат, review и ТЗ. Живой NVIDIA не проверен — ключ пока не получен.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q      # 78 passed
