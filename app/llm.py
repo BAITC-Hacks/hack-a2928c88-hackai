@@ -81,8 +81,12 @@ class Extractor:
     def extract(self, sources, answer_fields):
         started = time.monotonic()
         result = self._extract(sources, answer_fields)
+        self.log_result(result, started, 'extract')
+        return result
+
+    def log_result(self, result, started, workflow):
         # Metadata only: no keys, business input, generated text or provider messages.
-        event = {"at": datetime.now(timezone.utc).isoformat(), "mode": result[1],
+        event = {"at": datetime.now(timezone.utc).isoformat(), "workflow": workflow, "mode": result[1],
                  "provider": result[2], "failures": result[3],
                  "elapsed_ms": round((time.monotonic() - started) * 1000)}
         path = Path(os.getenv("LLM_LOG_PATH", "logs/llm_calls.jsonl"))
@@ -93,7 +97,6 @@ class Extractor:
                     handle.write(json.dumps(event) + "\n")
         except OSError:
             pass  # A log disk failure must not invent success/failure of an AI call.
-        return result
 
     def _extract(self, sources, answer_fields):
         if sum(map(len, sources.values())) > 30000:

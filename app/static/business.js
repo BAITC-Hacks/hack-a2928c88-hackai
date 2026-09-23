@@ -288,6 +288,8 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     const confirmBtn = el('button', {type: 'button', class: 'bp-primary', text: 'Подтвердить отмеченные'});
     const publishBtn = el('button', {type: 'button', text: card.published ? 'Опубликовать изменения' : 'Опубликовать'});
     const published = el('p', {class: 'bp-success msg msg-ok', role: 'status', hidden: true});
+    const reviewPanel = el('section', {class: 'bp-review', 'aria-label': 'Проверка задачи перед стартом'});
+    renderReview(reviewPanel);
 
     saveBtn.addEventListener('click', () => {
       if (!state.dirty.size) { status.textContent = 'Нет несохранённых изменений'; return; }
@@ -341,7 +343,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
           el('div', {class: 'bp-actionbar'},
             unconfirmedHint(card),
             el('div', {class: 'bp-actions'}, checkAll, saveBtn, confirmBtn, publishBtn)),
-          published),
+          published, reviewPanel),
         renderRating(card.rating, previousTotal))].filter(Boolean));
     cardStep.hidden = false;
     lockControls();
@@ -389,6 +391,8 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       row.classList.remove('bp-confirmed');
       row.classList.add('bp-dirty');
       confirmationStatus.textContent = 'Есть несохранённые правки — после сохранения потребуется подтверждение';
+      const reviewPanel = cardStep.querySelector('.bp-review');
+      if (reviewPanel) renderReview(reviewPanel);
     });
     check.addEventListener('change', () => {
       if (check.checked) state.checked.add(key); else state.checked.delete(key);
@@ -424,6 +428,52 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     if (!input) return;
     input.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center'});
     input.focus({preventScroll: true});
+  }
+
+  function renderReview(panel) {
+    const card = state.card;
+    const review = card.review || {status: 'not_run'};
+    const dirty = state.dirty.size > 0;
+    const stale = review.status === 'stale' || (review.revision != null && review.revision !== card.revision);
+    const btn = el('button', {type: 'button', class: 'bp-primary',
+      text: review.status === 'not_run' ? 'Что помешает начать?' : 'Проверить ещё раз'});
+    btn.disabled = dirty || state.conflict;
+    btn.addEventListener('click', () => run(btn, 'Проверяем задачу…', async () => {
+      if (state.dirty.size) throw new Error('Сначала сохраните изменения карточки');
+      if (state.conflict) throw new Error('Сначала загрузите актуальную карточку');
+      // Do not rerender the editor: preserve the human's pending confirmation checkboxes.
+      try {
+        const updated = await api.reviewCard(card.id);
+        state.card = updated;
+        renderReview(panel);
+        lockControls();
+      } catch (error) {
+        panel.querySelector('.bp-review-status').textContent = 'Проверка недоступна. Введённые данные сохранены; повторите запрос.';
+        throw error;
+      }
+    }));
+    const note = el('p', {class: 'bp-review-status', role: 'status', 'aria-live': 'polite'});
+    panel.replaceChildren(el('h4', {text: 'Что стоит уточнить до старта'}),
+      el('p', {class: 'bp-hint', text: 'Проверка не меняет рейтинг и ничего не подтверждает. Ответы и решение остаются за вами.'}), btn, note);
+    if (dirty) { note.textContent = 'Есть несохранённые правки. Сохраните их перед проверкой; прежние результаты не относятся к текущему тексту.'; return; }
+    if (stale) { note.textContent = 'Карточка изменилась — результаты проверки устарели. Запустите проверку ещё раз.'; return; }
+    if (review.status === 'not_run') { note.textContent = 'Проверка ещё не выполнена.'; return; }
+    if (review.status !== 'complete') { note.textContent = 'Проверка недоступна. Повторите запрос.'; return; }
+    panel.append(el('p', {class: 'bp-hint', text: review.mode === 'mock'
+      ? 'Демонстрационная проверка · mock: только правила, без реального AI.'
+      : 'AI-проверка · ' + (review.provider || 'live') + '. Замечания требуют проверки человеком.'}));
+    if (!review.issues?.length) note.textContent = 'Проверка не выявила замечаний; это не гарантия реализуемости.';
+    for (const issue of (review.issues || []).slice(0, 3)) {
+      const focus = el('button', {type: 'button', class: 'bp-link', text: 'Уточнить поле'});
+      focus.addEventListener('click', () => focusField(issue.field));
+      const item = el('article', {class: 'bp-review-issue'},
+        el('h5', {text: FIELD_LABEL[issue.field] || issue.field}),
+        el('p', {class: 'bp-hint', text: issue.kind === 'rule' ? 'Проверка правилом' : 'AI-предположение, проверьте'}),
+        issue.quote ? el('blockquote', {text: issue.quote}) : el('p', {class: 'bp-hint', text: 'Поле пустое — цитаты нет.'}),
+        el('p', {text: issue.message}), el('p', {text: issue.question}), focus);
+      panel.append(item);
+    }
+    panel.append(el('p', {class: 'bp-hint', text: 'Чтобы проверка стала видна командам, опубликуйте карточку после ручного подтверждения полей.'}));
   }
 
   function renderRating(rating, previousTotal) {

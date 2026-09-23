@@ -13,6 +13,8 @@ from pydantic import Field, HttpUrl
 from app.llm import Extractor
 from app.rating import calculate_rating, confirm_fields, edit_card, is_confirmed
 from app.recommend import recommend
+from app.review import CardReviewer, review_view, carry_review
+from app.insights import catalog_insights
 from app.schemas import Model, Draft, TaskCard, CardContent, CardField, Proposal, TeamProfile, NonEmpty
 from app.store import Store
 
@@ -80,8 +82,10 @@ def card_view(record):
     value.update(confirmed_fields=[f for f in CardContent.model_fields if is_confirmed(card, f)],
         rating=calculate_rating(card).model_dump(), evidence=record["evidence"],
         mode=record["mode"], provider=record.get("provider", "mock"), warnings=record.get("warnings", []),
-        revision=record["revision"], published=record.get("snapshot") is not None,
-        has_unpublished_changes=bool(record.get("snapshot") and record["snapshot"]["revision"] != record["revision"]))
+        review=review_view(record), revision=record["revision"], published=record.get("snapshot") is not None,
+        has_unpublished_changes=bool(record.get("snapshot") and (
+            record["snapshot"]["revision"] != record["revision"] or
+            (record.get('review') and record['snapshot'].get('review') != review_view(record)))))
     return value
 
 
@@ -121,9 +125,10 @@ def seed(store):
         Store.put(db, "meta", "seeded", {"done": True})
 
 
-def create_app(database_path=None, seed_demo=None, extractor=None):
+def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None):
     store = Store(database_path or os.getenv("DATABASE_PATH", "data/runtime/sana.sqlite3"))
     ai = extractor or Extractor()
+    critic = reviewer or CardReviewer(ai)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -219,7 +224,8 @@ def create_app(database_path=None, seed_demo=None, extractor=None):
         found = [c for c in cards if (not industry or c["industry"] == industry) and
                  (not level or c["rating"]["level"] == level) and (not needle or matches(c, needle))]
         response.headers["X-Total-Count"] = str(len(found))
-        return found[offset:offset + limit] if limit else found[offset:]
+        page = found[offset:offset + limit] if limit else found[offset:]
+        return [{**c, 'catalog_insights': catalog_insights(c, cards)} for c in page]
 
     @app.get("/api/catalog/facets")
     def facets():
@@ -237,6 +243,26 @@ def create_app(database_path=None, seed_demo=None, extractor=None):
         with store.transaction() as db:
             return card_view(require(db, "card", id))
 
+    @app.post("/api/cards/{id}/review", dependencies=[Depends(business)])
+    def review_card(id: str, if_match: str | None = Header(default=None)):
+        with store.transaction() as db:
+            record = require(db, "card", id)
+            check_revision(record, if_match)
+            fields = CardContent.model_validate({f: record['card'][f] for f in CardContent.model_fields}).model_dump()
+        # No transaction is held while awaiting the provider. Recheck revision after it returns.
+        try:
+            result = critic.review(fields)
+        except ValueError as exc:
+            raise HTTPException(422, 'Недопустимая карточка для проверки') from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, 'Проверка недоступна. Текст сохранён; попробуйте ещё раз.') from exc
+        with store.transaction() as db:
+            current = require(db, "card", id)
+            check_revision(current, if_match)
+            current['review'] = {**result, 'revision': current['revision']}
+            Store.put(db, 'card', id, current)
+            return card_view(current)
+
     def mutate(id, revision, operation):
         with store.transaction() as db:
             record = require(db, "card", id)
@@ -247,6 +273,8 @@ def create_app(database_path=None, seed_demo=None, extractor=None):
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
             record["revision"] += 1
+            if all(record['card'][f] == getattr(card, f) for f in CardContent.model_fields):
+                carry_review(record, record['revision'] - 1)
             Store.put(db, "card", id, record)
             return card_view(record)
 
@@ -281,11 +309,12 @@ def create_app(database_path=None, seed_demo=None, extractor=None):
             if not card.title.strip() or any(getattr(card, f).strip() and not is_confirmed(card, f) for f in CardContent.model_fields):
                 raise HTTPException(422, "Укажите название и подтвердите каждое заполненное поле")
             record["revision"] += 1
+            carry_review(record, record['revision'] - 1)
             record.setdefault("first_published_at", datetime.now(timezone.utc).isoformat())
             record["snapshot"] = card_view(record)
             record["snapshot"].update(published=True, has_unpublished_changes=False, first_published_at=record["first_published_at"])
             Store.put(db, "card", id, record)
-            return card_view(record)
+            return {**card_view(record), 'catalog_insights': catalog_insights(record['snapshot'], published(db))}
 
     @app.get("/api/teams")
     def teams():
@@ -297,7 +326,7 @@ def create_app(database_path=None, seed_demo=None, extractor=None):
         with store.transaction() as db:
             team = require(db, "team", id)
             cards = published(db)
-        return recommend(team, cards, limit)
+        return [{**c, 'catalog_insights': catalog_insights(c, cards)} for c in recommend(team, cards, limit)]
 
     def proposal_view(db, item):
         return {**item, "team_name": require(db, "team", item["team_id"])["name"]}

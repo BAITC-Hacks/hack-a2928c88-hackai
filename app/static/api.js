@@ -41,6 +41,7 @@ export const api = {
   clarifyDraft: draftId => request(`/drafts/${id(draftId)}/clarify`, {method:'POST', role:'business'}),
   buildCard: (draftId, body) => request(`/drafts/${id(draftId)}/card`, {method:'POST', body, role:'business'}),
   getCard: cardId => request(`/cards/${id(cardId)}`),
+  reviewCard: cardId => request(`/cards/${id(cardId)}/review`, {method:'POST', role:'business', cardId}),
   updateCard: (cardId, body) => request(`/cards/${id(cardId)}`, {method:'PATCH', body, role:'business', cardId}),
   confirmCard: (cardId, body) => request(`/cards/${id(cardId)}/confirm`, {method:'POST', body, role:'business', cardId}),
   publishCard: cardId => request(`/cards/${id(cardId)}/publish`, {method:'POST', role:'business', cardId}),
