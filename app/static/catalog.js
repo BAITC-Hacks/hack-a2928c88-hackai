@@ -1,4 +1,5 @@
 // T-002: каталог для команд и решения бизнеса. Порядок и баллы приходят из API.
+import {specificationPreview} from './specification.js';
 const LEVELS = { draft: 'Черновик', working: 'Рабочая', ready: 'Готовая', priority: 'Приоритетная' };
 const FIELDS = {
   context: 'Контекст', need: 'Задача', users: 'Пользователи', data: 'Данные',
@@ -10,7 +11,20 @@ const STATUSES = { pending: 'Ждёт решения', selected: 'Команда
 const PAGE_SIZE = 20;
 const INDUSTRY_CHIPS = 8;
 const CONDITION_FIELDS = { title: 'Название', industry: 'Отрасль', ...FIELDS };
+const COMPARED_FIELDS = {...CONDITION_FIELDS, technical_specification:'Техническое задание'};
 const conditionText = value => typeof value === 'string' ? value.replace(/\r\n/g, '\n') : '';
+function conditionValue(card, key) {
+  if (key !== 'technical_specification') return conditionText(card[key]);
+  const doc = card.technical_specification;
+  if (!doc || typeof doc !== 'object') return '';
+  // Compare agreed text and selected ideas, not timestamps, provider or internal IDs.
+  const sections = {title:'Название ТЗ',summary:'Цель и результат',requirements:'Требования',
+    architecture:'Подход и ограничения',acceptance:'Приёмка',plan:'Этапы',risks:'Риски',questions:'Вопросы'};
+  const ideaFields = {title:'Название идеи',description:'Описание',rationale:'Польза',implementation:'Реализация',acceptance:'Проверка'};
+  return [...Object.entries(sections).map(([field,label]) => `${label}: ${conditionText(doc[field])}`),
+    ...(doc.ideas || []).map((idea,index) => `Идея ${index+1}\n` +
+      Object.entries(ideaFields).map(([field,label]) => `${label}: ${conditionText(idea[field])}`).join('\n'))].join('\n\n');
+}
 const conditionRevision = value => Number.isInteger(value) && value > 0 ? value : null;
 
 function validConditions(value, taskId) {
@@ -504,6 +518,15 @@ export function mountCatalog(root, api) {
 
   function taskPanel(card) {
     const nodes = [];
+    if (card.technical_specification) {
+      const spec = element('details', undefined, 'catalog-specification');
+      spec.append(element('summary', 'Техническое задание, утверждённое бизнесом'));
+      const download = element('a', 'Скачать утверждённое ТЗ в PDF', 'spec-download');
+      download.href = `/api/cards/${encodeURIComponent(card.id)}/specification.pdf`;
+      download.download = 'sana-specification.pdf';
+      spec.append(download, specificationPreview(card.technical_specification));
+      nodes.push(spec);
+    }
     const rec = state.recs.find(r => r.id === card.id);
     const team = state.teams.find(t => String(t.id) === state.teamId);
     if (rec && team) nodes.push(element('p', `Совпадает с профилем ${team.name}: ${rec.matched.join(', ')}.`, 'catalog-fit'));
@@ -718,7 +741,7 @@ export function mountCatalog(root, api) {
       } else {
         const currentRevision = conditionRevision(check.card.revision);
         result.append(element('p', currentRevision ? `Проверена опубликованная версия ${currentRevision}.` : 'Номер проверенной опубликованной версии неизвестен.', 'muted'));
-        const changes = Object.entries(CONDITION_FIELDS).filter(([key]) => conditionText(snapshot[key]) !== conditionText(check.card[key]));
+        const changes = Object.entries(COMPARED_FIELDS).filter(([key]) => conditionValue(snapshot,key) !== conditionValue(check.card,key));
         if (!changes.length) result.append(element('p', 'На момент проверки опубликованные условия совпадают с условиями отклика'));
         else {
           summary.append(element('span', 'Условия изменились после отклика', 'tag tag-warn'));
@@ -735,8 +758,8 @@ export function mountCatalog(root, api) {
           for (const [key, label] of changes) {
             const row = element('tr');
             const name = element('th', label); name.scope = 'row';
-            row.append(name, element('td', conditionText(snapshot[key]) || 'Не указано'),
-              element('td', conditionText(check.card[key]) || 'Не указано'));
+            row.append(name, element('td', conditionValue(snapshot,key) || 'Не указано'),
+              element('td', conditionValue(check.card,key) || 'Не указано'));
             body.append(row);
           }
           table.append(head, body);
@@ -754,8 +777,8 @@ export function mountCatalog(root, api) {
     });
     saved.append(element('summary', 'Сохранённый снимок условий'));
     const fields = element('dl', undefined, 'catalog-facts');
-    for (const [key, label] of Object.entries(CONDITION_FIELDS)) {
-      fields.append(element('dt', label), element('dd', conditionText(snapshot[key]) || 'Не указано'));
+    for (const [key, label] of Object.entries(COMPARED_FIELDS)) {
+      fields.append(element('dt', label), element('dd', conditionValue(snapshot,key) || 'Не указано'));
     }
     saved.append(fields);
     history.append(saved, element('p', 'Изменение условий не означает согласие команды. Обсудите изменения перед началом работы.', 'muted'));

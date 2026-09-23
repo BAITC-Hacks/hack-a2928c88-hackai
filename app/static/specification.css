@@ -1,0 +1,14 @@
+.business-panel .spec-panel {margin-top:28px;padding:24px;border:1px solid var(--line,#d5e1d8);border-radius:16px;background:var(--surface,#fff)}
+.business-panel .spec-toggle {display:flex;gap:10px;align-items:flex-start;font-weight:600;cursor:pointer}
+.business-panel .spec-toggle input {width:20px;height:20px;flex:none;margin:2px 0;accent-color:var(--accent,#2e9cca)}
+.business-panel .spec-edit {display:grid;gap:7px;margin:18px 0;font-weight:600}
+.business-panel .spec-edit textarea {font-weight:400;min-height:70px;white-space:pre-wrap}
+.business-panel .spec-idea {margin:20px 0;padding:18px;border:1px solid var(--line,#d5e1d8);border-radius:12px;min-width:0}
+.business-panel .spec-idea legend {padding:0 8px;font-weight:600}
+.business-panel .spec-actions {display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
+.business-panel .spec-state {padding:12px;border-left:4px solid var(--accent,#2e9cca);background:var(--sunk,#f4f7f4)}
+.business-panel .spec-preview,.catalog-panel .spec-preview {padding:18px;border:1px solid var(--line,#d5e1d8);border-radius:12px;overflow-wrap:anywhere}
+.business-panel .spec-preview p,.catalog-panel .spec-preview p {white-space:pre-wrap;line-height:1.6}
+.business-panel .spec-preview h5,.catalog-panel .spec-preview h5 {font-size:16px;margin:20px 0 8px}
+.catalog-panel .spec-download {display:inline-block;margin:12px 0;font-weight:600}
+@media(max-width:640px){.business-panel .spec-panel{padding:14px}.business-panel .spec-actions button{width:100%}}
