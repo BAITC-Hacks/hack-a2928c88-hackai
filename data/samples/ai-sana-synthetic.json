@@ -1,0 +1,910 @@
+{
+  "synthetic": true,
+  "notice": "Все организации, данные, профили, подтверждения и ссылки синтетические. Карточки — ручной эталон автора набора, не результат AI. example.com не является работающим прототипом.",
+  "source": "coord/notes/Q-132813-claude.md",
+  "drafts": [
+    {
+      "id": "D1",
+      "text": "Нужен чат-бот для нашего магазина, чтобы отвечал клиентам.",
+      "industry": "Розничная торговля",
+      "answers": {},
+      "synthetic": true
+    },
+    {
+      "id": "D2",
+      "text": "Фермерское хозяйство, 400 га пшеницы. Хотим понимать, когда поливать поля. Сейчас агроном решает на глаз. Решение нужно агроному и бригадирам. Связь: agro.demo@example.com.",
+      "industry": "Сельское хозяйство",
+      "answers": {},
+      "synthetic": true
+    },
+    {
+      "id": "D3",
+      "text": "Частная клиника, 3 филиала. Пациенты часто не приходят на приём, окна простаивают. Нужен инструмент, который заранее покажет риск неявки, чтобы администратор успел позвонить. Есть обезличенная выгрузка записей за год (CSV, ~20 тыс. строк). Персональные данные не передаём, работа только на обезличенной выгрузке, срок 6 недель. Контакт: руководитель регистратуры, clinic.demo@example.com, созвон раз в неделю.",
+      "industry": "Здравоохранение",
+      "answers": {},
+      "synthetic": true
+    },
+    {
+      "id": "D4",
+      "text": "Колледж, 1200 студентов. Расписание составляют вручную в Excel, после каждого изменения неделю правят накладки по аудиториям и преподавателям. Нужен прототип, который проверяет расписание на конфликты и предлагает замены. Пользователи — завуч и диспетчер. Дадим шаблон расписания и список аудиторий (XLSX, без ФИО студентов). Ограничения: веб, без установки, 8 недель. Результат — веб-прототип с загрузкой XLSX и отчётом о конфликтах. Контакт: завуч, college.demo@example.com, встреча онлайн раз в 2 недели.",
+      "industry": "Образование",
+      "answers": {},
+      "synthetic": true
+    },
+    {
+      "id": "D5",
+      "text": "Региональная служба доставки, 35 курьеров. Маршруты строит диспетчер вручную каждое утро, это занимает около 1,5 часа, курьеры часто пересекаются по районам. Нужен прототип, который по списку заказов предлагает распределение по курьерам и маршруты. Пользователи — диспетчер, итоговый маршрут видит курьер. Данные: обезличенные заказы за 3 месяца (CSV: адрес-квартал, окно доставки, вес), карта зон. Ограничения: 10 недель, веб, без интеграции с нашей CRM, только открытые картографические данные. Результат: веб-прототип с загрузкой CSV, картой и экспортом маршрутов. Успех: составление плана ≤ 20 минут, суммарный пробег на тестовом дне меньше ручного плана. Контакт: логист, logistics.demo@example.com, созвон по вторникам, обратная связь письменно в течение 3 рабочих дней после каждого этапа.",
+      "industry": "Логистика",
+      "answers": {},
+      "synthetic": true
+    }
+  ],
+  "cards": [
+    {
+      "title": "Чат-бот для ответов клиентам магазина",
+      "context": "Магазин бытовой техники, 2 точки и Instagram. На вопросы клиентов в директе отвечает один менеджер, вечером ответы задерживаются.",
+      "need": "Автоматически отвечать на типовые вопросы о наличии, доставке и гарантии.",
+      "users": "Покупатели, которые пишут в Instagram; менеджер магазина.",
+      "data": "",
+      "constraints": "",
+      "expected_result": "Прототип бота для Instagram с ответами на типовые вопросы и передачей сложных вопросов менеджеру.",
+      "success_criteria": "",
+      "contact": "Владелец магазина, shop.demo@example.com",
+      "interaction_format": "",
+      "feedback_process": "",
+      "id": "T1",
+      "draft_id": "D1",
+      "industry": "Розничная торговля",
+      "confirmations": {
+        "title": {
+          "value": "Чат-бот для ответов клиентам магазина",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "context": {
+          "value": "Магазин бытовой техники, 2 точки и Instagram. На вопросы клиентов в директе отвечает один менеджер, вечером ответы задерживаются.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "need": {
+          "value": "Автоматически отвечать на типовые вопросы о наличии, доставке и гарантии.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "users": {
+          "value": "Покупатели, которые пишут в Instagram; менеджер магазина.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "expected_result": {
+          "value": "Прототип бота для Instagram с ответами на типовые вопросы и передачей сложных вопросов менеджеру.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "contact": {
+          "value": "Владелец магазина, shop.demo@example.com",
+          "confirmed_by": "synthetic-fixture-author"
+        }
+      },
+      "synthetic": true
+    },
+    {
+      "title": "Подсказка сроков полива пшеницы",
+      "context": "Фермерское хозяйство, 400 га пшеницы. Время полива агроном определяет на глаз.",
+      "need": "Понимать, когда поливать поля.",
+      "users": "Агроном и бригадиры.",
+      "data": "",
+      "constraints": "",
+      "expected_result": "",
+      "success_criteria": "",
+      "contact": "agro.demo@example.com",
+      "interaction_format": "",
+      "feedback_process": "",
+      "id": "T2",
+      "draft_id": "D2",
+      "industry": "Сельское хозяйство",
+      "confirmations": {
+        "title": {
+          "value": "Подсказка сроков полива пшеницы",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "context": {
+          "value": "Фермерское хозяйство, 400 га пшеницы. Время полива агроном определяет на глаз.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "need": {
+          "value": "Понимать, когда поливать поля.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "users": {
+          "value": "Агроном и бригадиры.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "contact": {
+          "value": "agro.demo@example.com",
+          "confirmed_by": "synthetic-fixture-author"
+        }
+      },
+      "synthetic": true
+    },
+    {
+      "title": "Прогноз неявки пациентов на приём",
+      "context": "Частная клиника, 3 филиала. Пациенты часто не приходят, окна простаивают.",
+      "need": "Заранее видеть риск неявки, чтобы администратор успел позвонить.",
+      "users": "Администраторы регистратуры.",
+      "data": "Обезличенная выгрузка записей за год, CSV, около 20 тыс. строк.",
+      "constraints": "Персональные данные не передаются, только обезличенная выгрузка; срок 6 недель.",
+      "expected_result": "",
+      "success_criteria": "",
+      "contact": "Руководитель регистратуры, clinic.demo@example.com",
+      "interaction_format": "Созвон раз в неделю.",
+      "feedback_process": "",
+      "id": "T3",
+      "draft_id": "D3",
+      "industry": "Здравоохранение",
+      "confirmations": {
+        "title": {
+          "value": "Прогноз неявки пациентов на приём",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "context": {
+          "value": "Частная клиника, 3 филиала. Пациенты часто не приходят, окна простаивают.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "need": {
+          "value": "Заранее видеть риск неявки, чтобы администратор успел позвонить.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "users": {
+          "value": "Администраторы регистратуры.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "data": {
+          "value": "Обезличенная выгрузка записей за год, CSV, около 20 тыс. строк.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "constraints": {
+          "value": "Персональные данные не передаются, только обезличенная выгрузка; срок 6 недель.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "contact": {
+          "value": "Руководитель регистратуры, clinic.demo@example.com",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "interaction_format": {
+          "value": "Созвон раз в неделю.",
+          "confirmed_by": "synthetic-fixture-author"
+        }
+      },
+      "synthetic": true
+    },
+    {
+      "title": "Проверка расписания колледжа на конфликты",
+      "context": "Колледж, 1200 студентов. Расписание составляют вручную в Excel, накладки после изменений правят около недели.",
+      "need": "Автоматически находить конфликты аудиторий и преподавателей и предлагать замены.",
+      "users": "Завуч и диспетчер расписания.",
+      "data": "Шаблон расписания и список аудиторий, XLSX, без ФИО студентов.",
+      "constraints": "Веб, без установки; 8 недель.",
+      "expected_result": "Веб-прототип: загрузка XLSX, отчёт о конфликтах, варианты замен.",
+      "success_criteria": "",
+      "contact": "Завуч, college.demo@example.com",
+      "interaction_format": "Онлайн-встреча раз в 2 недели.",
+      "feedback_process": "",
+      "id": "T4",
+      "draft_id": "D4",
+      "industry": "Образование",
+      "confirmations": {
+        "title": {
+          "value": "Проверка расписания колледжа на конфликты",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "context": {
+          "value": "Колледж, 1200 студентов. Расписание составляют вручную в Excel, накладки после изменений правят около недели.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "need": {
+          "value": "Автоматически находить конфликты аудиторий и преподавателей и предлагать замены.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "users": {
+          "value": "Завуч и диспетчер расписания.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "data": {
+          "value": "Шаблон расписания и список аудиторий, XLSX, без ФИО студентов.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "constraints": {
+          "value": "Веб, без установки; 8 недель.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "expected_result": {
+          "value": "Веб-прототип: загрузка XLSX, отчёт о конфликтах, варианты замен.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "contact": {
+          "value": "Завуч, college.demo@example.com",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "interaction_format": {
+          "value": "Онлайн-встреча раз в 2 недели.",
+          "confirmed_by": "synthetic-fixture-author"
+        }
+      },
+      "synthetic": true
+    },
+    {
+      "title": "Распределение заказов и маршрутов курьеров",
+      "context": "Региональная служба доставки, 35 курьеров. Диспетчер вручную строит маршруты около 1,5 часа каждое утро, районы курьеров пересекаются.",
+      "need": "По списку заказов предлагать распределение по курьерам и маршруты.",
+      "users": "Диспетчер; курьер видит итоговый маршрут.",
+      "data": "Обезличенные заказы за 3 месяца (CSV: адрес-квартал, окно доставки, вес), карта зон.",
+      "constraints": "10 недель; веб; без интеграции с CRM; только открытые картографические данные.",
+      "expected_result": "Веб-прототип: загрузка CSV, карта, экспорт маршрутов.",
+      "success_criteria": "План составляется не дольше 20 минут; суммарный пробег на тестовом дне меньше, чем в ручном плане.",
+      "contact": "Логист, logistics.demo@example.com",
+      "interaction_format": "Созвон по вторникам.",
+      "feedback_process": "Письменная обратная связь в течение 3 рабочих дней после каждого этапа.",
+      "id": "T5",
+      "draft_id": "D5",
+      "industry": "Логистика",
+      "confirmations": {
+        "title": {
+          "value": "Распределение заказов и маршрутов курьеров",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "context": {
+          "value": "Региональная служба доставки, 35 курьеров. Диспетчер вручную строит маршруты около 1,5 часа каждое утро, районы курьеров пересекаются.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "need": {
+          "value": "По списку заказов предлагать распределение по курьерам и маршруты.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "users": {
+          "value": "Диспетчер; курьер видит итоговый маршрут.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "data": {
+          "value": "Обезличенные заказы за 3 месяца (CSV: адрес-квартал, окно доставки, вес), карта зон.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "constraints": {
+          "value": "10 недель; веб; без интеграции с CRM; только открытые картографические данные.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "expected_result": {
+          "value": "Веб-прототип: загрузка CSV, карта, экспорт маршрутов.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "success_criteria": {
+          "value": "План составляется не дольше 20 минут; суммарный пробег на тестовом дне меньше, чем в ручном плане.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "contact": {
+          "value": "Логист, logistics.demo@example.com",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "interaction_format": {
+          "value": "Созвон по вторникам.",
+          "confirmed_by": "synthetic-fixture-author"
+        },
+        "feedback_process": {
+          "value": "Письменная обратная связь в течение 3 рабочих дней после каждого этапа.",
+          "confirmed_by": "synthetic-fixture-author"
+        }
+      },
+      "synthetic": true
+    }
+  ],
+  "ratings": {
+    "T1": {
+      "total": 49,
+      "level": "working",
+      "items": [
+        {
+          "key": "context_need",
+          "label": "Контекст и потребность",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "context",
+            "need"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: context +10 из 10; need +10 из 10"
+        },
+        {
+          "key": "data",
+          "label": "Данные и материалы",
+          "maximum": 20,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "data"
+          ],
+          "explanation": "0/20: data +0 из 20"
+        },
+        {
+          "key": "result",
+          "label": "Ожидаемый результат",
+          "maximum": 15,
+          "earned": 15,
+          "confirmed_fields": [
+            "expected_result"
+          ],
+          "missing_fields": [],
+          "explanation": "15/15: expected_result +15 из 15"
+        },
+        {
+          "key": "success",
+          "label": "Критерии успеха",
+          "maximum": 15,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "success_criteria"
+          ],
+          "explanation": "0/15: success_criteria +0 из 15"
+        },
+        {
+          "key": "constraints",
+          "label": "Ограничения",
+          "maximum": 10,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "constraints"
+          ],
+          "explanation": "0/10: constraints +0 из 10"
+        },
+        {
+          "key": "users",
+          "label": "Пользователи",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "users"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: users +10 из 10"
+        },
+        {
+          "key": "business",
+          "label": "Связь с бизнесом",
+          "maximum": 10,
+          "earned": 4,
+          "confirmed_fields": [
+            "contact"
+          ],
+          "missing_fields": [
+            "interaction_format",
+            "feedback_process"
+          ],
+          "explanation": "4/10: contact +4 из 4; interaction_format +0 из 3; feedback_process +0 из 3"
+        }
+      ],
+      "missing_fields": [
+        "data",
+        "success_criteria",
+        "constraints",
+        "interaction_format",
+        "feedback_process"
+      ],
+      "recommended_eligible": true
+    },
+    "T2": {
+      "total": 34,
+      "level": "draft",
+      "items": [
+        {
+          "key": "context_need",
+          "label": "Контекст и потребность",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "context",
+            "need"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: context +10 из 10; need +10 из 10"
+        },
+        {
+          "key": "data",
+          "label": "Данные и материалы",
+          "maximum": 20,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "data"
+          ],
+          "explanation": "0/20: data +0 из 20"
+        },
+        {
+          "key": "result",
+          "label": "Ожидаемый результат",
+          "maximum": 15,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "expected_result"
+          ],
+          "explanation": "0/15: expected_result +0 из 15"
+        },
+        {
+          "key": "success",
+          "label": "Критерии успеха",
+          "maximum": 15,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "success_criteria"
+          ],
+          "explanation": "0/15: success_criteria +0 из 15"
+        },
+        {
+          "key": "constraints",
+          "label": "Ограничения",
+          "maximum": 10,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "constraints"
+          ],
+          "explanation": "0/10: constraints +0 из 10"
+        },
+        {
+          "key": "users",
+          "label": "Пользователи",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "users"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: users +10 из 10"
+        },
+        {
+          "key": "business",
+          "label": "Связь с бизнесом",
+          "maximum": 10,
+          "earned": 4,
+          "confirmed_fields": [
+            "contact"
+          ],
+          "missing_fields": [
+            "interaction_format",
+            "feedback_process"
+          ],
+          "explanation": "4/10: contact +4 из 4; interaction_format +0 из 3; feedback_process +0 из 3"
+        }
+      ],
+      "missing_fields": [
+        "data",
+        "expected_result",
+        "success_criteria",
+        "constraints",
+        "interaction_format",
+        "feedback_process"
+      ],
+      "recommended_eligible": false
+    },
+    "T3": {
+      "total": 67,
+      "level": "working",
+      "items": [
+        {
+          "key": "context_need",
+          "label": "Контекст и потребность",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "context",
+            "need"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: context +10 из 10; need +10 из 10"
+        },
+        {
+          "key": "data",
+          "label": "Данные и материалы",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "data"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: data +20 из 20"
+        },
+        {
+          "key": "result",
+          "label": "Ожидаемый результат",
+          "maximum": 15,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "expected_result"
+          ],
+          "explanation": "0/15: expected_result +0 из 15"
+        },
+        {
+          "key": "success",
+          "label": "Критерии успеха",
+          "maximum": 15,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "success_criteria"
+          ],
+          "explanation": "0/15: success_criteria +0 из 15"
+        },
+        {
+          "key": "constraints",
+          "label": "Ограничения",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "constraints"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: constraints +10 из 10"
+        },
+        {
+          "key": "users",
+          "label": "Пользователи",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "users"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: users +10 из 10"
+        },
+        {
+          "key": "business",
+          "label": "Связь с бизнесом",
+          "maximum": 10,
+          "earned": 7,
+          "confirmed_fields": [
+            "contact",
+            "interaction_format"
+          ],
+          "missing_fields": [
+            "feedback_process"
+          ],
+          "explanation": "7/10: contact +4 из 4; interaction_format +3 из 3; feedback_process +0 из 3"
+        }
+      ],
+      "missing_fields": [
+        "expected_result",
+        "success_criteria",
+        "feedback_process"
+      ],
+      "recommended_eligible": true
+    },
+    "T4": {
+      "total": 82,
+      "level": "ready",
+      "items": [
+        {
+          "key": "context_need",
+          "label": "Контекст и потребность",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "context",
+            "need"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: context +10 из 10; need +10 из 10"
+        },
+        {
+          "key": "data",
+          "label": "Данные и материалы",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "data"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: data +20 из 20"
+        },
+        {
+          "key": "result",
+          "label": "Ожидаемый результат",
+          "maximum": 15,
+          "earned": 15,
+          "confirmed_fields": [
+            "expected_result"
+          ],
+          "missing_fields": [],
+          "explanation": "15/15: expected_result +15 из 15"
+        },
+        {
+          "key": "success",
+          "label": "Критерии успеха",
+          "maximum": 15,
+          "earned": 0,
+          "confirmed_fields": [],
+          "missing_fields": [
+            "success_criteria"
+          ],
+          "explanation": "0/15: success_criteria +0 из 15"
+        },
+        {
+          "key": "constraints",
+          "label": "Ограничения",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "constraints"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: constraints +10 из 10"
+        },
+        {
+          "key": "users",
+          "label": "Пользователи",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "users"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: users +10 из 10"
+        },
+        {
+          "key": "business",
+          "label": "Связь с бизнесом",
+          "maximum": 10,
+          "earned": 7,
+          "confirmed_fields": [
+            "contact",
+            "interaction_format"
+          ],
+          "missing_fields": [
+            "feedback_process"
+          ],
+          "explanation": "7/10: contact +4 из 4; interaction_format +3 из 3; feedback_process +0 из 3"
+        }
+      ],
+      "missing_fields": [
+        "success_criteria",
+        "feedback_process"
+      ],
+      "recommended_eligible": true
+    },
+    "T5": {
+      "total": 100,
+      "level": "priority",
+      "items": [
+        {
+          "key": "context_need",
+          "label": "Контекст и потребность",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "context",
+            "need"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: context +10 из 10; need +10 из 10"
+        },
+        {
+          "key": "data",
+          "label": "Данные и материалы",
+          "maximum": 20,
+          "earned": 20,
+          "confirmed_fields": [
+            "data"
+          ],
+          "missing_fields": [],
+          "explanation": "20/20: data +20 из 20"
+        },
+        {
+          "key": "result",
+          "label": "Ожидаемый результат",
+          "maximum": 15,
+          "earned": 15,
+          "confirmed_fields": [
+            "expected_result"
+          ],
+          "missing_fields": [],
+          "explanation": "15/15: expected_result +15 из 15"
+        },
+        {
+          "key": "success",
+          "label": "Критерии успеха",
+          "maximum": 15,
+          "earned": 15,
+          "confirmed_fields": [
+            "success_criteria"
+          ],
+          "missing_fields": [],
+          "explanation": "15/15: success_criteria +15 из 15"
+        },
+        {
+          "key": "constraints",
+          "label": "Ограничения",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "constraints"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: constraints +10 из 10"
+        },
+        {
+          "key": "users",
+          "label": "Пользователи",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "users"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: users +10 из 10"
+        },
+        {
+          "key": "business",
+          "label": "Связь с бизнесом",
+          "maximum": 10,
+          "earned": 10,
+          "confirmed_fields": [
+            "contact",
+            "interaction_format",
+            "feedback_process"
+          ],
+          "missing_fields": [],
+          "explanation": "10/10: contact +4 из 4; interaction_format +3 из 3; feedback_process +3 из 3"
+        }
+      ],
+      "missing_fields": [],
+      "recommended_eligible": true
+    }
+  },
+  "teams": [
+    {
+      "id": "TM1",
+      "name": "DataNomads",
+      "interests": [
+        "ритейл",
+        "клиентский сервис"
+      ],
+      "skills": [
+        "NLP",
+        "бэкенд",
+        "дизайн диалогов"
+      ],
+      "technologies": [
+        "Python",
+        "FastAPI",
+        "OpenAI API"
+      ],
+      "synthetic": true
+    },
+    {
+      "id": "TM2",
+      "name": "ByteBuilders",
+      "interests": [
+        "логистика",
+        "оптимизация"
+      ],
+      "skills": [
+        "алгоритмы",
+        "фронтенд",
+        "работа с картами"
+      ],
+      "technologies": [
+        "Python",
+        "OR-Tools",
+        "Leaflet",
+        "React"
+      ],
+      "synthetic": true
+    },
+    {
+      "id": "TM3",
+      "name": "MedMetrics",
+      "interests": [
+        "здравоохранение",
+        "аналитика"
+      ],
+      "skills": [
+        "ML на табличных данных",
+        "визуализация"
+      ],
+      "technologies": [
+        "Python",
+        "pandas",
+        "scikit-learn",
+        "Streamlit"
+      ],
+      "synthetic": true
+    },
+    {
+      "id": "TM4",
+      "name": "AgroPixel",
+      "interests": [
+        "агротех",
+        "открытые данные"
+      ],
+      "skills": [
+        "анализ временных рядов",
+        "работа с API погоды"
+      ],
+      "technologies": [
+        "Python",
+        "Open-Meteo API",
+        "Plotly"
+      ],
+      "synthetic": true
+    },
+    {
+      "id": "TM5",
+      "name": "EduOps",
+      "interests": [
+        "образование",
+        "автоматизация"
+      ],
+      "skills": [
+        "парсинг Excel",
+        "проверка ограничений",
+        "фронтенд"
+      ],
+      "technologies": [
+        "TypeScript",
+        "Node.js",
+        "SheetJS"
+      ],
+      "synthetic": true
+    }
+  ],
+  "proposals": [
+    {
+      "id": "P1",
+      "task_id": "T1",
+      "team_id": "TM1",
+      "idea": "Бот отвечает на частые вопросы по базе ответов, которую подтвердил менеджер; всё незнакомое передаёт человеку.",
+      "plan": "1) собрать 30 частых вопросов с менеджером; 2) бот на тестовом аккаунте; 3) передача менеджеру; 4) демо и правки.",
+      "timeline": "4 недели",
+      "prototype_url": "https://example.com/datanomads-shopbot",
+      "synthetic": true
+    },
+    {
+      "id": "P2",
+      "task_id": "T5",
+      "team_id": "TM2",
+      "idea": "Кластеризация заказов по зонам и окнам доставки, затем маршрутизация с ограничениями по весу.",
+      "plan": "1) разбор CSV и карты зон; 2) базовое распределение; 3) маршрутизация OR-Tools; 4) карта и экспорт; 5) сравнение с ручным планом на тестовом дне.",
+      "timeline": "8 недель",
+      "prototype_url": "https://example.com/bytebuilders-routes",
+      "synthetic": true
+    },
+    {
+      "id": "P3",
+      "task_id": "T5",
+      "team_id": "TM5",
+      "idea": "Простой веб-инструмент: жадное распределение по зонам и ручная правка маршрута перетаскиванием.",
+      "plan": "1) загрузка CSV; 2) распределение по зонам; 3) интерфейс правки; 4) экспорт.",
+      "timeline": "6 недель",
+      "prototype_url": "https://example.com/eduops-routes",
+      "synthetic": true
+    },
+    {
+      "id": "P4",
+      "task_id": "T3",
+      "team_id": "TM3",
+      "idea": "Модель риска неявки по обезличенным признакам записи и ежедневный список на обзвон для администратора.",
+      "plan": "1) разведочный анализ выгрузки; 2) базовая модель и валидация; 3) экран «обзвон на завтра»; 4) проверка с регистратурой.",
+      "timeline": "6 недель",
+      "prototype_url": "https://example.com/medmetrics-noshow",
+      "synthetic": true
+    },
+    {
+      "id": "P5",
+      "task_id": "T2",
+      "team_id": "TM4",
+      "idea": "Подсказка о поливе по открытому прогнозу погоды и осадкам. Сначала уточним у агронома, какие данные о полях есть.",
+      "plan": "1) встреча с агрономом, чтобы уточнить данные; 2) подключение Open-Meteo; 3) правило «поливать или ждать»; 4) пилот на одном поле.",
+      "timeline": "5 недель",
+      "prototype_url": "https://example.com/agropixel-irrigation",
+      "synthetic": true
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+    "_comment":  "Как запускать каждого агента без интерактива. {prompt} — короткая строка-указатель на файл задачи. Если флаг не поддерживается вашей версией CLI — поправьте здесь (codex exec --help, claude --help, agy --help).",
+    "commands":  {
+                     "claude":  [
+                                    "claude",
+                                    "-p",
+                                    "{prompt}",
+                                    "--permission-mode",
+                                    "acceptEdits"
+                                ],
+                     "codex":  [
+                                   "codex",
+                                   "exec",
+                                   "--skip-git-repo-check",
+                                   "--full-auto",
+                                   "{prompt}"
+                               ],
+                     "gemini":  [
+                                    "gemini",
+                                    "-p",
+                                    "{prompt}"
+                                ]
+                 },
+    "text_only":  [
+                      "gemini"
+                  ],
+    "_comment_text":  "text_commands — режим «только ответ, без правки файлов» (совет, ревью, вопросы). Если codex не знает --sandbox, уберите эти два элемента.",
+    "text_commands":  {
+                          "claude":  [
+                                         "claude",
+                                         "-p",
+                                         "{prompt}"
+                                     ],
+                          "codex":  [
+                                        "codex",
+                                        "exec",
+                                        "--skip-git-repo-check",
+                                        "--sandbox",
+                                        "read-only",
+                                        "{prompt}"
+                                    ],
+                          "gemini":  [
+                                         "gemini",
+                                         "-p",
+                                         "{prompt}"
+                                     ]
+                      }
+}

@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+.worktrees/
+logs/
+docs/site-chunks/
+docs/site-live.html
+docs/site-flight.txt
+docs/site-records.json
+docs/site-page.js
+docs/site-visible.txt
+coord/**/*.log
