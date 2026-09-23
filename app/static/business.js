@@ -1,6 +1,7 @@
 import {mountStages} from './stages.js';
 // T-001: экран бизнеса. Баллы не считаем — только показываем rating из API.
 import {mountSpecification} from './specification.js';
+import {mountQuestions} from './questions.js';
 const FIELDS = [
   ['title', 'Название'],
   ['context', 'Контекст'],
@@ -76,6 +77,9 @@ export function stamp(level, extra = '') {
 }
 
 export function mountBusiness(root, api, onPublished = () => {}) {
+  root.communityCleanup?.();
+  let businessQuestions = null;
+  root.communityCleanup = () => businessQuestions?.destroy();
   root.classList.add('business-panel');
   root.replaceChildren();
 
@@ -103,6 +107,15 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   const cardStep = el('section', {class: 'bp-step bp-step-card', hidden: true, 'aria-labelledby': 'bp-card-h'});
   const reloadBtn = el('button', {type: 'button', text: 'Загрузить актуальную карточку', hidden: true});
   const reloadWarning = el('p', {class: 'bp-hint', hidden: true, text: 'Загрузка заменит несохранённые правки и снимет все отметки для подтверждения. Нажмите кнопку только если готовы их потерять.'});
+  // Keep existing drafts intact when an answer updates the saved card elsewhere.
+  if (root.communityCardChanged) removeEventListener('community-card-changed', root.communityCardChanged);
+  root.communityCardChanged = event => {
+    if (event.detail.cardId !== state.card?.id) return;
+    state.conflict = true;
+    reloadBtn.hidden = reloadWarning.hidden = false;
+    status.textContent = 'Ответ перенесён в сохранённую карточку. Загрузите актуальную версию и подтвердите поле.';
+  };
+  addEventListener('community-card-changed', root.communityCardChanged);
   reloadBtn.addEventListener('click', () => run(reloadBtn, 'Загружаем…', async () => {
     const card = await api.getCard(state.card.id);
     state.conflict = false;
@@ -333,6 +346,8 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   }
 
   function renderCard(previousTotal) {
+    businessQuestions?.destroy();
+    businessQuestions = null;
     const card = state.card;
     const gains = gainsOf(card);
     const confirmed = new Set(card.confirmed_fields || []);
@@ -407,6 +422,11 @@ export function mountBusiness(root, api, onPublished = () => {}) {
           published, reviewPanel),
         renderRating(card.rating, previousTotal))].filter(Boolean));
     cardStep.hidden = false;
+    if (card.published) {
+      const questions = el('section', {class:'bp-community-questions'});
+      cardStep.prepend(questions);
+      businessQuestions = mountQuestions(questions, card, {business:true});
+    }
     lockControls();
   }
 

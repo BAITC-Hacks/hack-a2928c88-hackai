@@ -57,6 +57,7 @@
     <nav class="roles" role="tablist" aria-label="Роль в демо">
       <button id="business-tab" role="tab" aria-selected="true" aria-controls="business">Бизнесу</button>
       <button id="catalog-tab" role="tab" aria-selected="false" aria-controls="catalog">Командам</button>
+      <button id="community-tab" role="tab" aria-selected="false" aria-controls="community">Сотрудничество</button>
     </nav>
     <div class="top-meta">
       <span class="tag" title="Все организации, команды и отклики в демо вымышлены">Демо · синтетика</span>
@@ -68,11 +69,15 @@
 <main id="main" tabindex="-1">
   <section id="business" role="tabpanel" aria-labelledby="business-tab"></section>
   <section id="catalog" role="tabpanel" aria-labelledby="catalog-tab" hidden></section>
+  <section id="community" role="tabpanel" aria-labelledby="community-tab" hidden></section>
 </main>
 <footer><span>AI помогает уточнять задачу. Бизнес подтверждает факты и выбирает команды.</span><span>Баллы готовности считает код, не модель.</span></footer>
 <script type="module">
 import {api} from '/static/api.js';
-const screens = ['business', 'catalog'];
+for (const name of ['community', 'project-letters']) {
+  const css = document.createElement('link'); css.rel='stylesheet'; css.href=`/static/${name}.css`; document.head.append(css);
+}
+const screens = ['business', 'catalog', 'community'];
 let catalogScreen;
 function show(name, {focus = false} = {}) {
   for (const n of screens) {
@@ -84,6 +89,7 @@ function show(name, {focus = false} = {}) {
 }
 document.querySelector('#business-tab').onclick = () => show('business');
 document.querySelector('#catalog-tab').onclick = () => { show('catalog'); catalogScreen?.refresh(); };
+document.querySelector('#community-tab').onclick = () => show('community');
 addEventListener('hashchange', () => { const n = location.hash.slice(1); if (screens.includes(n)) show(n); });
 async function mount(name, callback) {
   const root = document.getElementById(name);
@@ -97,11 +103,12 @@ async function mount(name, callback) {
   }
 }
 await mount('catalog', async (m, root) => { catalogScreen = await m.mountCatalog(root, api); });
+await mount('community', (m, root) => m.mountCommunity(root));
 await mount('business', (m, root) => m.mountBusiness(root, api, card => {
   show('catalog', {focus: true});
   catalogScreen?.focusCard(card);
 }));
-if (location.hash === '#catalog') show('catalog');
+if (screens.includes(location.hash.slice(1))) show(location.hash.slice(1));
 </script>
 </body>
 </html>
