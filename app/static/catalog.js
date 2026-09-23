@@ -9,6 +9,7 @@ const FIELDS = {
 const STATUSES = { pending: 'Ждёт решения', selected: 'Команда выбрана', rejected: 'Отклонён' };
 const PAGE_SIZE = 20;
 const INDUSTRY_CHIPS = 8;
+let fieldId = 0;
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -26,6 +27,7 @@ function button(text, action, className) {
 
 function labeled(text, input, className = 'catalog-field') {
   const label = element('label', undefined, className);
+  input.setAttribute('aria-label', text);
   label.append(element('span', text), input);
   return label;
 }
@@ -78,10 +80,100 @@ function chip(name, value, text, count, checked) {
   input.name = name;
   input.value = value;
   input.checked = checked;
+  input.setAttribute('aria-label', text);
   const face = element('span', text);
   if (count !== undefined) face.append(element('em', count));
   label.append(input, face);
   return label;
+}
+
+function currentInsights(card) {
+  const insights = card.catalog_insights;
+  return card.revision != null && insights?.revision === card.revision ? insights : null;
+}
+
+function validPosition(rank, total) {
+  return Number.isInteger(rank) && Number.isInteger(total) && rank > 0 && rank <= total;
+}
+
+function positionLabel(card) {
+  const insights = currentInsights(card);
+  if (!insights || !validPosition(insights.rank, insights.total)) return null;
+  return element('p', `Место №${insights.rank} из ${insights.total} в общем каталоге`, 'catalog-rank');
+}
+
+function improvementSection(card) {
+  const section = element('section', undefined, 'catalog-insights');
+  section.append(element('h4', 'Как бизнес может улучшить задачу'));
+  const insights = currentInsights(card);
+  if (card.synthetic) section.append(element('p', 'Общий каталог содержит учебные примеры. Эта карточка синтетическая.', 'muted'));
+  if (!insights || !Array.isArray(insights.actions)) {
+    section.append(element('p', 'Прогноз улучшений пока недоступен для этой версии карточки.'));
+    return section;
+  }
+  if (!insights.actions.length) {
+    section.append(element('p', 'Все поля рейтинга заполнены и подтверждены'));
+    return section;
+  }
+  const scenarios = element('ol', undefined, 'catalog-scenarios');
+  for (const action of insights.actions.slice(0, 3)) {
+    if (!action || typeof action.label !== 'string' || !Number.isFinite(action.delta)
+      || !Number.isFinite(action.score_after) || !Number.isFinite(card.rating?.total)) continue;
+    const item = element('li');
+    item.append(element('h5', action.label));
+    if (action.instruction) item.append(element('p', action.instruction));
+    item.append(element('p', `Изменение рейтинга: ${action.delta >= 0 ? '+' : ''}${action.delta} баллов.`, 'catalog-progress'),
+      element('p', `При выполнении этого действия и повторной публикации: ${card.rating.total} → ${action.score_after} баллов.`));
+    if (validPosition(action.rank_after, insights.total)) {
+      item.append(element('p', `Предполагаемое место №${action.rank_after} из ${insights.total}.`));
+    }
+    scenarios.append(item);
+  }
+  section.append(element('p', 'Каждое действие — отдельный сценарий от текущей карточки. Прогнозы не суммируются.', 'muted'), scenarios,
+    element('p', 'Предпросмотр по текущему состоянию каталога. Место изменится после подтверждения и публикации.', 'muted'));
+  if (!scenarios.children.length) section.append(element('p', 'Прогноз улучшений пока недоступен для этой версии карточки.'));
+  return section;
+}
+
+function reviewSection(card) {
+  const section = element('section', undefined, 'catalog-review');
+  section.append(element('h4', 'Что стоит уточнить до старта'));
+  const insights = currentInsights(card);
+  const review = card.catalog_insights?.review;
+  if (review?.status === 'stale' || (review?.revision != null && review.revision !== card.revision)) {
+    section.append(element('p', 'Карточка изменилась — результаты проверки устарели'));
+    return section;
+  }
+  if (!insights) {
+    section.append(element('p', 'Проверка недоступна для этой версии карточки.'));
+    return section;
+  }
+  if (!review || review.status === 'not_run') {
+    section.append(element('p', 'Проверка ещё не выполнена'));
+    return section;
+  }
+  if (review.mode === 'mock') section.append(element('p', 'Демонстрационная проверка · mock. Это не реальный AI-анализ.', 'tag tag-warn'));
+  if (review.status !== 'complete' || review.revision !== card.revision || !Array.isArray(review.issues)) {
+    section.append(element('p', 'Проверка сейчас недоступна. Это не мешает отправить отклик.'));
+    return section;
+  }
+  if (!review.issues.length) {
+    section.append(element('p', 'Проверка не выявила замечаний; это не гарантия реализуемости'));
+    return section;
+  }
+  for (const issue of review.issues.slice(0, 3)) {
+    if (!issue) continue;
+    const item = element('article', undefined, 'catalog-review-issue');
+    item.append(element('h5', FIELDS[issue.field] || (issue.field === 'title' ? 'Название' : issue.field || 'Карточка')),
+      element('p', issue.kind === 'rule' ? 'Проверка правилом'
+        : issue.kind === 'ai' ? 'AI-предположение — требует проверки человеком'
+          : 'Замечание — требует проверки человеком', 'muted'));
+    if (issue.quote) item.append(element('blockquote', issue.quote));
+    if (issue.message) item.append(element('p', issue.message));
+    if (issue.question) item.append(element('p', `Вопрос бизнесу: ${issue.question}`));
+    section.append(item);
+  }
+  return section;
 }
 
 /** Mount with the Promise-based adapter from TEAM.md. Returns refresh() and focusCard(card). */
@@ -95,6 +187,8 @@ export function mountCatalog(root, api) {
     pinned: null, showAllIndustries: false,
   };
   let busy = false;
+  // Drafts belong to tasks, not to the current tab, page, or team persona.
+  const drafts = new Map();
 
   // Header with team persona
   const persona = element('select');
@@ -261,6 +355,10 @@ export function mountCatalog(root, api) {
     if ((card.rating?.total ?? 0) < 40) foot.append(element('span', 'Нужны уточнения', 'tag tag-warn'));
     if (card.mode === 'live') foot.append(element('span', 'AI live', 'tag tag-live'));
     item.append(element('p', card.industry || 'Отрасль не указана', 'eyebrow'), title, score, ruler(card), foot);
+    if (card.synthetic) foot.append(element('span', 'Синтетический пример', 'tag'));
+    if (card.mode === 'mock') foot.append(element('span', 'Демо · mock', 'tag tag-mock'));
+    const position = positionLabel(card);
+    if (position) item.append(position);
     return item;
   }
 
@@ -331,12 +429,10 @@ export function mountCatalog(root, api) {
     if (!isSheet()) return;
     detail.classList.add('is-open');
     backdrop.classList.add('is-open');
-    document.body.classList.add('catalog-lock');
   }
   function closeSheet() {
     detail.classList.remove('is-open');
     backdrop.classList.remove('is-open');
-    document.body.classList.remove('catalog-lock');
     listCol.querySelector('.catalog-active .catalog-open')?.focus({preventScroll: true});
   }
   detail.addEventListener('keydown', event => { if (event.key === 'Escape') closeSheet(); });
@@ -372,6 +468,8 @@ export function mountCatalog(root, api) {
     if (card.mode === 'mock') badges.append(element('span', 'Карточка собрана без реального AI', 'tag tag-mock'));
     if ((card.rating?.total ?? 0) < 40) badges.append(element('span', 'Нужны уточнения — откликаться можно', 'tag tag-warn'));
     top.append(close, meta, title, scoreLine, badges);
+    const position = positionLabel(card);
+    if (position) top.append(position);
 
     const tabs = element('div', undefined, 'tabs catalog-tabs');
     tabs.setAttribute('role', 'tablist');
@@ -421,7 +519,7 @@ export function mountCatalog(root, api) {
     if (gains.length) {
       rating.append(element('p', 'Бизнес может поднять рейтинг: ' + gains.map(g => `${FIELDS[g.field] || g.field} +${g.points}`).join(', ') + '.', 'muted'));
     }
-    nodes.push(rating);
+    nodes.push(rating, reviewSection(card), improvementSection(card));
     const cta = button('Откликнуться на задачу', () => { state.tab = 'apply'; renderDetail(); }, 'btn-primary catalog-cta');
     nodes.push(cta);
     return nodes;
@@ -437,7 +535,8 @@ export function mountCatalog(root, api) {
 
   function proposalForm(card) {
     const form = element('form', undefined, 'catalog-proposal-form');
-    form.noValidate = false;
+    form.noValidate = true;
+    const draft = drafts.get(card.id) || {team_id: state.teamId};
     form.append(element('h4', 'Предложить решение'),
       element('p', 'Отклик увидит бизнес. Он сам сравнивает предложения и выбирает команду — система никого не назначает.', 'muted'));
     const team = element('select');
@@ -449,9 +548,10 @@ export function mountCatalog(root, api) {
     for (const item of state.teams) {
       const option = element('option', item.name);
       option.value = String(item.id);
-      option.selected = String(item.id) === state.teamId;
+      option.selected = String(item.id) === draft.team_id;
       team.append(option);
     }
+    team.value = draft.team_id || '';
     const teamInfo = element('p', teamSummary(state.teams.find(t => String(t.id) === team.value)), 'muted catalog-team-info');
     team.addEventListener('change', () => { teamInfo.textContent = teamSummary(state.teams.find(t => String(t.id) === team.value)); });
     form.append(labeled('Учебная команда', team), teamInfo);
@@ -464,6 +564,7 @@ export function mountCatalog(root, api) {
     ]) {
       const input = element(tag);
       input.name = key;
+      input.value = draft[key] || '';
       input.required = true;
       input.placeholder = hint;
       if (tag === 'textarea') input.rows = 3;
@@ -472,6 +573,30 @@ export function mountCatalog(root, api) {
       inputs[key] = input;
       form.append(labeled(label, input));
     }
+    const saveDraft = () => drafts.set(card.id, {team_id: team.value,
+      ...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value]))});
+    form.addEventListener('input', saveDraft);
+    form.addEventListener('change', saveDraft);
+    // Store the initial persona too, so later persona changes cannot move this draft.
+    saveDraft();
+    const urlInput = inputs.prototype_url;
+    const urlError = element('small', '', 'catalog-field-error');
+    urlError.id = `catalog-prototype-error-${++fieldId}`;
+    urlError.setAttribute('aria-live', 'polite');
+    urlInput.setAttribute('aria-describedby', urlError.id);
+    urlInput.parentElement.append(urlError);
+    function validatePrototype() {
+      const value = urlInput.value.trim();
+      const message = !value ? 'Укажите ссылку на прототип.'
+        : !/^https?:\/\//i.test(value) || !safeLink(value)
+          ? 'Укажите корректную ссылку на прототип с http:// или https://.' : '';
+      urlError.textContent = message;
+      urlInput.setCustomValidity(message);
+      urlInput.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+    urlInput.addEventListener('input', () => {
+      if (urlError.textContent) validatePrototype();
+    });
     const submit = element('button', 'Отправить отклик', 'btn-primary');
     submit.type = 'submit';
     submit.disabled = !state.teams.length;
@@ -482,8 +607,7 @@ export function mountCatalog(root, api) {
       for (const input of Object.values(inputs)) {
         input.setCustomValidity(input.required && !input.value.trim() ? 'Заполните поле.' : '');
       }
-      const url = inputs.prototype_url.value.trim();
-      if (url && !safeLink(url)) inputs.prototype_url.setCustomValidity('Укажите ссылку с протоколом https:// или http://.');
+      validatePrototype();
       if (!form.reportValidity()) return;
       const selected = state.teams.find(item => String(item.id) === team.value);
       if (!selected) return;
@@ -492,6 +616,7 @@ export function mountCatalog(root, api) {
           team_id: selected.id, ...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])),
         });
         state.proposals = [...state.proposals.filter(item => item.id !== proposal.id), proposal];
+        drafts.delete(card.id);
         bumpCount(card.id, state.proposals.length);
         state.tab = 'proposals';
         renderList();
@@ -594,13 +719,20 @@ export function mountCatalog(root, api) {
       const [facets, teams] = await Promise.all([api.catalogFacets(), api.listTeams()]);
       state.facets = facets;
       state.teams = teams;
+      const industryRemoved = state.industry && !facets.industries.some(item => item.name === state.industry);
+      if (industryRemoved) { state.industry = ''; state.page = 0; }
       await fetchPage();
+      if (state.page > 0 && !state.cards.length) {
+        state.page = Math.max(0, Math.ceil(state.total / PAGE_SIZE) - 1);
+        await fetchPage();
+      }
+      state.selected = state.cards.find(card => card.id === state.selected?.id) || state.selected;
       if (state.selected) state.proposals = await api.listProposals(state.selected.id);
       renderPersona();
       renderFilters();
       renderList();
       renderDetail();
-      say(`Каталог обновлён. Опубликованных задач: ${facets.total}.`);
+      say(`${industryRemoved ? 'Выбранная отрасль исчезла; фильтр сброшен. ' : ''}Каталог обновлён. Опубликованных задач: ${facets.total}.`);
     });
   }
 
