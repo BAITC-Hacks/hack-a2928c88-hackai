@@ -38,3 +38,34 @@ def test_budget_counts_calls_not_just_success(monkeypatch):
     ai.reserve()
     with pytest.raises(ValueError, match='hourly_budget'):
         ai.reserve()
+
+
+def test_live_openai_parsed_and_invalid_quote_fallback(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    import openai
+    monkeypatch.setenv('MOCK', '0')
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-not-a-real-key')
+    monkeypatch.delenv('NVIDIA_API_KEY', raising=False)
+    monkeypatch.setenv('FALLBACK_TO_MOCK', '1')
+    monkeypatch.setenv('LLM_LOG_PATH', str(tmp_path / 'calls.jsonl'))
+    captured = {}
+    output = mock_extract({'draft':'Need a tool'}, {})
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.responses = self
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def parse(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(output_parsed=output)
+    monkeypatch.setattr(openai, 'OpenAI', FakeClient)
+    ai = Extractor()
+    _, mode, provider, failures = ai.extract({'draft':'Need a tool'}, {})
+    assert mode == 'live' and provider == 'openai' and not failures
+    assert captured['store'] is False and captured['text_format'] is Extraction
+    output.evidence[0].quote = 'Invented revenue'
+    result, mode, provider, failures = ai.extract({'draft':'Need a tool'}, {})
+    assert mode == provider == 'mock' and failures[0] == 'openai:ValueError'
+    assert all(e.quote in 'Need a tool' for e in result.evidence)
+    log = (tmp_path / 'calls.jsonl').read_text()
+    assert 'test-not-a-real-key' not in log and 'Need a tool' not in log

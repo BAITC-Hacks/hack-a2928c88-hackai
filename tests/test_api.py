@@ -81,3 +81,30 @@ def test_roles_validation_filter_and_persistence(client):
     with TestClient(create_app(client.app.state.store.path, seed_demo=True)) as reopened:
         assert reopened.get(f"/api/cards/{card['id']}").json()['id'] == card['id']
         assert len(reopened.get('/api/cards').json()) == 5
+
+
+def test_proposal_keeps_conditions_after_republication(client):
+    card = client.get('/api/cards').json()[-1]
+    team = client.get('/api/teams').json()[0]
+    proposal = client.post(f"/api/cards/{card['id']}/proposals", headers=T, json={
+        'team_id':team['id'], 'idea':'Build', 'plan':'Prototype', 'timeline':'5 days',
+        'prototype_url':'https://example.com/prototype'}).json()
+    current = client.get(f"/api/cards/{card['id']}").json()
+    edited = mutate(client, current, '', {'changes':{'title':'Changed conditions'}}, 'patch').json()
+    confirmed = mutate(client, edited, '/confirm', {'fields':['title']}).json()
+    assert mutate(client, confirmed, '/publish').status_code == 200
+    saved = next(p for p in client.get(f"/api/cards/{card['id']}/proposals").json() if p['id'] == proposal['id'])
+    assert saved['task_snapshot']['title'] == card['title']
+    assert saved['task_snapshot']['revision'] == card['revision']
+
+
+def test_concurrent_milestones_award_once(client):
+    from concurrent.futures import ThreadPoolExecutor
+    card = client.get('/api/cards').json()[0]
+    proposal = client.get(f"/api/cards/{card['id']}/proposals").json()[0]
+    url = f"/api/proposals/{proposal['id']}"
+    client.post(url + '/decision', headers=B, json={'action':'select'})
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda _: client.post(url + '/milestone', headers=B).json(), range(4)))
+    assert sum(not r['already_awarded'] for r in results) == 1
+    assert all(r['points'] == 10 for r in results)
