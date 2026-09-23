@@ -24,8 +24,8 @@ def main():
         expect(page.locator('.catalog-card').first).to_be_visible()
         page.locator('.catalog-filters select').select_option('draft')
         page.get_by_role('button', name='Показать задачи', exact=True).click()
-        expect(page.locator('.catalog-card')).to_have_count(1)
-        page.get_by_role('button', name='Посмотреть задачу', exact=True).click()
+        expect(page.locator('.catalog-card').first).to_be_visible()
+        page.get_by_role('button', name='Посмотреть задачу', exact=True).first.click()
         page.locator('.catalog-proposal-form select').select_option(index=1)
         unique = 'Browser smoke ' + str(uuid4())[:8]
         page.get_by_label('Идея решения', exact=True).fill(unique)

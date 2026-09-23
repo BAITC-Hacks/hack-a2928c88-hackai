@@ -87,16 +87,22 @@ def card_view(record):
 def seed(store):
     fixtures = json.loads((ROOT / "data/samples/ai-sana-synthetic.json").read_text(encoding="utf-8"))
     with store.transaction() as db:
-        if Store.get(db, "meta", "seeded"):
-            return
+        # Add missing fixture IDs on upgrades, preserving all existing records.
+        # Same schema: previous app versions can still read this database.
         for draft in fixtures["drafts"]:
             item = Draft.model_validate(draft).model_dump(mode="json")
+            if Store.get(db, "draft", item["id"]) is not None:
+                continue
             Store.put(db, "draft", item["id"], {"draft": item, "questions": [], "card_id": None})
         for team in fixtures["teams"]:
             item = TeamProfile.model_validate(team).model_dump(mode="json")
+            if Store.get(db, "team", item["id"]) is not None:
+                continue
             Store.put(db, "team", item["id"], item)
         for card in fixtures["cards"]:
             item = TaskCard.model_validate(card).model_dump(mode="json")
+            if Store.get(db, "card", item["id"]) is not None:
+                continue
             record = {"card": item, "revision": 1, "mode": "mock", "provider": "synthetic-fixture",
                 # Prepared synthetic cards are examples, not extracted source evidence.
                 "evidence": {}, "snapshot": None}
@@ -107,6 +113,8 @@ def seed(store):
             Store.put(db, "card", item["id"], record)
         for proposal in fixtures["proposals"]:
             item = Proposal.model_validate(proposal).model_dump(mode="json")
+            if Store.get(db, "proposal", item["id"]) is not None:
+                continue
             item.update(status="pending", progress_points=0)
             Store.put(db, "proposal", item["id"], item)
         Store.put(db, "meta", "seeded", {"done": True})

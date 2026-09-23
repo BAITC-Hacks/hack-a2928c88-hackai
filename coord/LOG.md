@@ -40,3 +40,4 @@
 - 23.09 14:57: live OpenAI и full UI E2E passed локально; 36 pytest passed. Claude T-008 + Q-145556 проверили backend и исправления; T-001/T-002 доработки остаются за людьми. Готовится hour-2 и образ с обоими экранами.
 
 - 23.09 15:08: Render live E2E passed, OpenAI на уточнениях и карточке. Synthetic=true тестовая запись оставлена в каталоге; рейтинг, публикация, отклик, ручное решение и однократный этап проверены.
+- 15:22 фон: ask --agent claude Read-only review: app/main.py additive seed change and script (pid 45464) → coord/notes/bg-152211707824-ask.log
