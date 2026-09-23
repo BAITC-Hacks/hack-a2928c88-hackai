@@ -4,7 +4,7 @@
 
 `docs/CASE.md` is now present and authoritative. Jury scoring is **20/15/25/15/10/10/5**, as recorded in `coord/notes/scoring-07.md`; the generic scoring below is historical. Old `context/*/track-07.md` describes fintech and MUST NOT be used as this case's context.
 
-Current application status: only domain schemas and readiness rating in `app/`, with tests. The FastAPI/UI/LLM/deploy scaffold described below is a prepared external harness, NOT an existing working app in this checkout. Reuse current files; do not assume `app/llm.py` or a deployment exists. Idea awaits captain confirmation before architecture/plan councils and implementation assignments.
+Captain approved the idea; architecture/plan councils and implementation are authorized. Human developer T-001 owns app/static/business.js and business.css; T-002 owns app/static/catalog.js and catalog.css. Contracts are in docs/TEAM.md. Do not assign these files to Claude or other AI agents. Old human data/pitch tasks are cancelled. Codex owns backend, shared page/API adapter, integration and deploy. Current starting status: domain schemas and readiness rating in `app/`, with tests. The scaffold below describes a prepared external harness, NOT proof of a working deployed app. Reuse current files; verify actual API/UI/LLM status.
 
 Gemini is unavailable (Antigravity unauthenticated; Gemini CLI IneligibleTierError). Do not count its failures as votes or factual research. Claude and Codex responses are in `coord/council/1327-idea/`.
 

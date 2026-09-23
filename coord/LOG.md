@@ -1,0 +1,22 @@
+# Журнал агентов
+
+- 13:25 фон: council --topic idea Кейс в docs/CASE.md, критерии в coord/notes/scoring-07.md.  (pid 46984) → coord/notes/bg-132538-council.log
+- 13:25 совет «Выбор идеи решения для кейса трека» начат: codex, claude, gemini, раундов критики 2, итог — codex [coord/council/1325-idea]
+- 13:25 фон: ask --agent gemini Какие есть платформы, где бизнес публикует задачи для студент (pid 33268) → coord/notes/bg-132557-ask.log
+- 13:25 фон: ask --agent claude По docs/CASE.md: 1) сценарий обязательного 5-минутного демо п (pid 40792) → coord/notes/bg-132557-ask.log
+- 13:26 вопрос gemini: Какие есть платформы, где бизнес публикует задачи для студентов (кейс-чемпионаты → coord/notes/Q-132557-gemini.md
+- 13:27 фон: council --topic idea Кейс docs/CASE.md, критерии coord/notes/scoring-07.md. Пред (pid 28684) → coord/notes/bg-132745-council.log
+- 13:27 совет «Выбор идеи решения для кейса трека» начат: codex, claude, gemini, раундов критики 2, итог — codex [coord/council/1327-idea]
+- 13:28 фон: ask --agent gemini Какие есть платформы, где бизнес публикует задачи для студент (pid 33676) → coord/notes/bg-132808-ask.log
+- 13:28 вопрос gemini: Какие есть платформы, где бизнес публикует задачи для студентов (кейс-чемпионаты → coord/notes/Q-132808-gemini.md
+- 13:28 фон: ask --agent claude По docs/CASE.md: 1) обязательное 5-минутное демо п.11 по секу (pid 36212) → coord/notes/bg-132813-ask.log
+- 13:29 вопрос claude: По docs/CASE.md: 1) обязательное 5-минутное демо п.11 по секундам; 2) пять синте → coord/notes/Q-132813-claude.md
+- 13:35 фон: ask --agent claude Короткое read-only ревью основы app/schemas.py, app/rating.py (pid 49284) → coord/notes/bg-133527682035-ask.log
+- 13:36 совет «Выбор идеи решения для кейса трека» завершён: консенсус=нет; решение coord/council/1327-idea/DECISION.md; в docs/IDEA.md
+- 13:36 вопрос claude: Короткое read-only ревью основы app/schemas.py, app/rating.py и tests/test_ratin → coord/notes/Q-133528-claude.md
+- 13:43 фон: council --topic arch Капитан утвердил docs/IDEA.md. ТЗ docs/CASE.md. Максимально (pid 7824) → coord/notes/bg-134302133163-council.log
+- 13:43 совет «Архитектура прототипа» начат: codex, claude, раундов критики 1, итог — codex [coord/council/1343-arch]
+- 13:43 новая задача T-001: Человек 1: 5 негативных примеров AI с источниками и ожидаемыми отказами; файл data/acceptance/ai-cases.json
+- 13:43 новая задача T-002: Человек 2: короткие русские тексты интерфейса и 5-минутный питч; docs/team/ui-copy.md и docs/team/pitch.md
+- 13:46 ??????? ??????? ??????? ????? ?? ??? ????? ?????????? UI. ???????? ? ??????? ??????: docs/TEAM.md. ?????? ??????? ?? ?????? ? ???? ????????.
+- 13:47 совет «Архитектура прототипа» завершён: консенсус=нет; решение coord/council/1343-arch/DECISION.md; в docs/ARCHITECTURE.md

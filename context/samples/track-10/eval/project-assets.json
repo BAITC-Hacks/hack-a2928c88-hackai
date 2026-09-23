@@ -1,0 +1,14 @@
+{
+  "name": "project-assets.csv",
+  "text": "# СИНТЕТИЧЕСКИЙ ПРИМЕР (создан командой для демо; не реальные данные)\nfile,type,source,license,license_until,ai_generated,sha256\nintro.mp4,video,собственная съёмка,own,,no,aa11\nbg_music.mp3,audio,stock-demo.example,standard,2026-06-30,no,bb22\nposter.png,image,генерация,,,yes,cc33\nvoice.wav,audio,диктор Н.,договор №5,2027-01-01,no,dd44\nlogo_client.svg,image,заказчик,,,no,ee55",
+  "expected_rule_ids": [],
+  "expected_keywords": [
+    "лиценз"
+  ],
+  "expected_issues": [
+    "bg_music: лицензия истекла 30.06.2026",
+    "poster: AI-материал без указания инструмента/прав",
+    "logo_client: нет подтверждения права использования"
+  ],
+  "note": "Синтетика. expected_issues — эталон для ручной проверки и AI-судьи; keywords — грубая автопроверка."
+}
