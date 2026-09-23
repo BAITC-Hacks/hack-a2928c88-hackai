@@ -1,7 +1,0 @@
-# СИНТЕТИЧЕСКИЙ ПРИМЕР (создан командой для демо; не реальные данные)
-file,type,source,license,license_until,ai_generated,sha256
-intro.mp4,video,собственная съёмка,own,,no,aa11
-bg_music.mp3,audio,stock-demo.example,standard,2026-06-30,no,bb22
-poster.png,image,генерация,,,yes,cc33
-voice.wav,audio,диктор Н.,договор №5,2027-01-01,no,dd44
-logo_client.svg,image,заказчик,,,no,ee55
