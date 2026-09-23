@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from app.schemas import (
-    CardContent, CardField, Confirmation, RatingBreakdown, RatingItem, TaskCard,
+    CardContent, CardField, Confirmation, RatingBreakdown, RatingGain, RatingItem, TaskCard,
 )
 
 # Component splits are explicit implementation choices within official weights.
@@ -15,6 +15,17 @@ RUBRIC = (
     ("users", "Пользователи", (("users", 10),)),
     ("business", "Связь с бизнесом", (("contact", 4), ("interaction_format", 3), ("feedback_process", 3))),
 )
+
+
+# Lower bound of each level above draft, from case section 4.
+THRESHOLDS = (("working", 40), ("ready", 70), ("priority", 90))
+
+
+def next_threshold(score: int) -> tuple[str | None, int]:
+    for level, bound in THRESHOLDS:
+        if score < bound:
+            return level, bound - score
+    return None, 0
 
 
 def readiness_level(score: int) -> str:
@@ -53,9 +64,13 @@ def calculate_rating(card: TaskCard) -> RatingBreakdown:
             ),
         ))
     total = sum(item.earned for item in items)
+    points = {field: pts for _, _, components in RUBRIC for field, pts in components}
+    gains = sorted((RatingGain(field=f, points=points[f]) for f in missing_all), key=lambda g: -g.points)
+    next_level, points_to_next = next_threshold(total)
     return RatingBreakdown(
         total=total, level=readiness_level(total), items=items,
         missing_fields=missing_all, recommended_eligible=total >= 40,
+        gains=gains, next_level=next_level, points_to_next=points_to_next,
     )
 
 

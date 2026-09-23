@@ -72,12 +72,21 @@ class RatingItem(Model):
     explanation: str
 
 
+class RatingGain(Model):
+    """Points a missing field adds once a human confirms it."""
+    field: CardField
+    points: int = Field(ge=1, le=20)
+
+
 class RatingBreakdown(Model):
     total: int = Field(ge=0, le=100)
     level: Readiness
     items: list[RatingItem]
     missing_fields: list[CardField]
     recommended_eligible: bool
+    gains: list[RatingGain] = Field(default_factory=list)
+    next_level: Readiness | None = None
+    points_to_next: int = Field(default=0, ge=0, le=100)
 
 
 class TeamProfile(Model):
