@@ -31,3 +31,16 @@
 - 23.09 14:42: публичный Render URL проверен HTTP smoke и Edge без мутаций; README обновлён. Режим mock, каталог доступен, business.js 404.
 
 - 23.09 14:45: после fetch обнаружен business UI 9cafaa7; каталог aa34489 уже интегрирован. 36 backend-тестов passed. docs/TEAM.md и T-001/T-002 обновлены: два ограниченных задания на доработку существующих экранов, без передачи UI-файлов AI-агентам. Business просмотрен по коду; браузерная приёмка ветки ещё не выполнена.
+- 14:51 фон: run --agent claude --id T-008 --text --task Read-only review backend app/main.py (pid 47908) → coord/notes/bg-145109043532-run.log
+- 14:51 claude ← T-008 (текст): При доступности провести независимое ревью готовых срезов и финального сценария: выдать замечания с проверками; до слияния устранены блокеры, ошибка запуска не считается ревью.
+- 14:53 claude → T-008: ответ в coord/notes/T-008-claude.md (rc=0)
+- 14:55 фон: ask --agent claude Follow-up to T-008. Read your review, current app/main.py see (pid 56968) → coord/notes/bg-145556346838-ask.log
+- 14:56 вопрос claude: Follow-up to T-008. Read your review, current app/main.py seed evidence, app/sta → coord/notes/Q-145556-claude.md
+
+- 23.09 14:57: live OpenAI и full UI E2E passed локально; 36 pytest passed. Claude T-008 + Q-145556 проверили backend и исправления; T-001/T-002 доработки остаются за людьми. Готовится hour-2 и образ с обоими экранами.
+
+- 23.09 15:08: Render live E2E passed, OpenAI на уточнениях и карточке. Synthetic=true тестовая запись оставлена в каталоге; рейтинг, публикация, отклик, ручное решение и однократный этап проверены.
+- 15:22 фон: ask --agent claude Read-only review: app/main.py additive seed change and script (pid 45464) → coord/notes/bg-152211707824-ask.log
+- 15:25 вопрос claude: Read-only review: app/main.py additive seed change and scripts/generate_syntheti → coord/notes/Q-152211-claude.md
+- 15:25 фон: ask --agent claude Read-only review app/main.py seed(): additive import missing  (pid 57180) → coord/notes/bg-152536460047-ask.log
+- 15:28 вопрос claude: Read-only review app/main.py seed(): additive import missing fixture IDs without → coord/notes/Q-152536-claude.md

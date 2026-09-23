@@ -7,14 +7,27 @@ async function request(path, {method = 'GET', body, role, cardId} = {}) {
     if (!revisions.has(cardId)) throw new Error('Откройте актуальную карточку перед изменением');
     headers['If-Match'] = String(revisions.get(cardId));
   }
-  const response = await fetch('/api' + path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
-  const data = await response.json();
+  let response;
+  try {
+    response = await fetch('/api' + path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
+  } catch {
+    throw new Error('Нет связи с сервером. Повторите запрос.');
+  }
+  let data;
+  try { data = await response.json(); }
+  catch {
+    throw new Error(response.ok
+      ? 'Сервер вернул некорректный ответ. Повторите запрос.'
+      : `Сервер временно недоступен (HTTP ${response.status}). Повторите запрос.`);
+  }
   if (!response.ok) {
     const invalidUrl = Array.isArray(data.detail) && data.detail.some(item => item.loc?.includes('prototype_url'));
     const message = typeof data.detail === 'string' ? data.detail : invalidUrl
       ? 'Укажите корректную ссылку на прототип (http:// или https://).'
       : 'Проверьте заполнение обязательных полей';
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   if (data.id && data.revision) revisions.set(data.id, data.revision);
   return data;

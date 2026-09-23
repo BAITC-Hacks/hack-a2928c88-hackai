@@ -1,6 +1,11 @@
+import json
+from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from app.main import create_app
+
+FIXTURE = json.loads((Path(__file__).parents[1] / 'data/samples/ai-sana-synthetic.json').read_text(encoding='utf-8'))
+SCORES = sorted((r['total'] for r in FIXTURE['ratings'].values()), reverse=True)
 
 B = {"X-Demo-Role": "business"}
 T = {"X-Demo-Role": "team"}
@@ -49,8 +54,9 @@ def test_human_confirmation_snapshot_and_stale_edit(client):
 
 def test_low_score_proposals_manual_choices_and_idempotent_milestone(client):
     cards = client.get('/api/cards').json()
-    assert len(cards) == 5
-    assert [c['rating']['total'] for c in cards] == [100, 82, 67, 49, 34]
+    assert len(cards) == len(FIXTURE['cards'])
+    assert all(c['synthetic'] and c['evidence'] == {} for c in cards)
+    assert [c['rating']['total'] for c in cards] == SCORES
     low = cards[-1]
     teams = client.get('/api/teams').json()
     ids = []
@@ -72,7 +78,7 @@ def test_low_score_proposals_manual_choices_and_idempotent_milestone(client):
 
 def test_roles_validation_filter_and_persistence(client):
     assert client.post('/api/drafts', json={'text':'x','industry':'y'}).status_code == 403
-    assert len(client.get('/api/cards?level=draft').json()) == 1
+    assert len(client.get('/api/cards?level=draft').json()) == sum(s < 40 for s in SCORES)
     card = build(client)
     assert client.patch(f"/api/cards/{card['id']}", headers=B, json={'changes':{'need':'x'}}).status_code == 428
     assert mutate(client, card, '', {'changes': {'confirmations': 'x'}}, 'patch').status_code == 422
@@ -80,7 +86,7 @@ def test_roles_validation_filter_and_persistence(client):
     assert client.get('/static/api.js').status_code == 200
     with TestClient(create_app(client.app.state.store.path, seed_demo=True)) as reopened:
         assert reopened.get(f"/api/cards/{card['id']}").json()['id'] == card['id']
-        assert len(reopened.get('/api/cards').json()) == 5
+        assert len(reopened.get('/api/cards').json()) == len(FIXTURE['cards'])
 
 
 def test_proposal_keeps_conditions_after_republication(client):
