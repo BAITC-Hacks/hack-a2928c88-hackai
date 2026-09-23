@@ -13,8 +13,21 @@ const FIELDS = [
   ['feedback_process', 'Обратная связь'],
 ];
 const FIELD_LABEL = Object.fromEntries(FIELDS);
+const FIELD_HINT = {
+  context: 'Что происходит сейчас и в чём затруднение',
+  need: 'Что должно измениться',
+  users: 'Для кого создаётся решение',
+  data: 'Какие данные, примеры или источники доступны команде',
+  constraints: 'Сроки, технологии, доступы',
+  expected_result: 'Какой конкретный результат вы ждёте',
+  success_criteria: 'Измеримые признаки, что результат принят',
+  contact: 'Кто отвечает со стороны бизнеса',
+  interaction_format: 'Встречи, созвоны, чат',
+  feedback_process: 'Как и когда даёте обратную связь',
+};
 const LONG_FIELDS = new Set(['context', 'need', 'users', 'data', 'constraints', 'expected_result', 'success_criteria', 'feedback_process']);
 const LEVELS = {draft: 'Черновик', working: 'Рабочая', ready: 'Готовая', priority: 'Приоритетная'};
+const STEPS = ['Черновик', 'Вопросы', 'Карточка', 'Публикация'];
 
 function points(n) {
   const mod10 = n % 10, mod100 = n % 100;
@@ -35,18 +48,45 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+function sourceLabel(sourceId) {
+  const id = String(sourceId || '');
+  if (id.startsWith('manual:')) return 'введено вручную';
+  if (id === 'draft') return 'из описания задачи';
+  const answer = /^q-(\d+)$/.exec(id);
+  if (answer) return 'из ответа на вопрос ' + (Number(answer[1]) + 1);
+  return 'источник: ' + id;
+}
+
+/** Ruler + ticks for a score. Values come from the API; the screen only draws them. */
+export function ruler(total, level, {small = false, ticks = false} = {}) {
+  const bar = el('div', {class: 'ruler' + (small ? ' sm' : ''), role: 'img',
+    'aria-label': `Готовность ${total} из 100, уровень «${LEVELS[level] || level}»`});
+  bar.dataset.level = level;
+  bar.style.setProperty('--v', String(total));
+  if (!ticks) return bar;
+  const marks = el('div', {class: 'ruler-ticks', 'aria-hidden': 'true'});
+  for (const at of [0, 40, 70, 90]) marks.append(el('span', {text: String(at), style: `left:${at}%`}));
+  return el('div', {}, bar, marks);
+}
+
+export function stamp(level, extra = '') {
+  return el('span', {class: 'stamp stamp-' + level, text: (LEVELS[level] || level) + extra});
+}
+
 export function mountBusiness(root, api, onPublished = () => {}) {
   root.classList.add('business-panel');
   root.replaceChildren();
 
-  const state = {draftId: null, questions: [], questionsReady: false, card: null, dirty: new Set(), checked: new Set(), busy: false, conflict: false};
+  const state = {draftId: null, questions: [], questionCount: 0, questionsReady: false, card: null,
+    dirty: new Set(), checked: new Set(), busy: false, conflict: false};
   const locked = new Map();
 
+  const steps = el('ol', {class: 'bp-steps', 'aria-label': 'Шаги сценария'});
   const status = el('p', {class: 'bp-status', role: 'status', 'aria-live': 'polite'});
-  const error = el('p', {class: 'bp-error', role: 'alert', hidden: true});
-  const inputStep = el('div', {class: 'bp-step'});
-  const questionStep = el('div', {class: 'bp-step', hidden: true});
-  const cardStep = el('div', {class: 'bp-step', hidden: true});
+  const error = el('p', {class: 'bp-error msg msg-error', role: 'alert', hidden: true});
+  const inputStep = el('section', {class: 'bp-step bp-step-input', 'aria-labelledby': 'bp-input-h'});
+  const questionStep = el('section', {class: 'bp-step', hidden: true, 'aria-labelledby': 'bp-questions-h'});
+  const cardStep = el('section', {class: 'bp-step bp-step-card', hidden: true, 'aria-labelledby': 'bp-card-h'});
   const reloadBtn = el('button', {type: 'button', text: 'Загрузить актуальную карточку', hidden: true});
   const reloadWarning = el('p', {class: 'bp-hint', hidden: true, text: 'Загрузка заменит несохранённые правки и снимет все отметки для подтверждения. Нажмите кнопку только если готовы их потерять.'});
   reloadBtn.addEventListener('click', () => run(reloadBtn, 'Загружаем…', async () => {
@@ -57,7 +97,31 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   }));
   const resetBtn = el('button', {type: 'button', class: 'bp-link', text: 'Новая задача'});
   resetBtn.addEventListener('click', () => { if (!state.busy) mountBusiness(root, api, onPublished); });
-  root.append(el('h2', {text: 'Опишите задачу бизнеса'}), status, error, reloadWarning, reloadBtn, inputStep, questionStep, cardStep, resetBtn);
+  const head = el('div', {class: 'bp-head'},
+    el('div', {}, el('p', {class: 'eyebrow', text: 'Бизнесу'}), el('h2', {text: 'Паспорт готовности задачи'})),
+    resetBtn);
+  root.append(head, steps, status, error, reloadWarning, reloadBtn, inputStep, questionStep, cardStep);
+
+  function renderSteps() {
+    const card = state.card;
+    const filled = card ? FIELDS.filter(([k]) => (card[k] || '').trim()).length : 0;
+    const confirmed = card ? (card.confirmed_fields || []).length : 0;
+    const current = !state.questionsReady ? 0 : !card ? 1 : card.published && !card.has_unpublished_changes ? 3 : 2;
+    const notes = [
+      industry.value.trim() || 'описание и отрасль',
+      state.questionCount ? state.questionCount + ' вопросов' : 'минимум 3 вопроса',
+      card ? `подтверждено ${confirmed} из ${filled}` : 'поля и подтверждение',
+      card?.published ? (card.has_unpublished_changes ? 'есть новые правки' : 'в каталоге') : 'в общий каталог',
+    ];
+    steps.replaceChildren(...STEPS.map((name, i) => {
+      const done = i < current || (i === 3 && card?.published && !card.has_unpublished_changes);
+      const item = el('li', {class: 'bp-stepper' + (done ? ' is-done' : i === current ? ' is-now' : '')},
+        el('b', {class: 'num', text: done ? '✓' : String(i + 1), 'aria-hidden': 'true'}),
+        el('span', {}, el('span', {class: 'bp-step-name', text: name}), el('small', {text: notes[i]})));
+      if (i === current) item.setAttribute('aria-current', 'step');
+      return item;
+    }));
+  }
 
   function lockControls() {
     if (!state.busy) return;
@@ -73,6 +137,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     clarifyBtn.disabled = state.questionsReady || !!state.card;
     inputStep.hidden = questionStep.hidden = !!state.card;
     if (!state.card) questionStep.hidden = !state.questionsReady;
+    renderSteps();
     lockControls();
   }
 
@@ -113,21 +178,30 @@ export function mountBusiness(root, api, onPublished = () => {}) {
 
   function badges(source) {
     const box = el('div', {class: 'bp-badges'});
-    if (source.mode === 'mock') box.append(el('span', {class: 'bp-badge bp-badge-mock', text: 'mock: ответ без реального AI'}));
-    else if (source.mode) box.append(el('span', {class: 'bp-badge', text: 'AI: ' + source.mode}));
-    if (source.synthetic) box.append(el('span', {class: 'bp-badge bp-badge-synthetic', text: 'Синтетика'}));
+    if (source.mode === 'mock') box.append(el('span', {class: 'tag tag-mock', text: 'mock: ответ без реального AI'}));
+    else if (source.mode) box.append(el('span', {class: 'tag tag-live', text: 'AI: ' + source.mode + (source.provider ? ' · ' + source.provider : '')}));
+    if (source.synthetic) box.append(el('span', {class: 'tag', text: 'Синтетика'}));
     return box;
   }
 
   // Шаг 1 — описание и отрасль.
-  const text = el('textarea', {id: 'bp-text', rows: 6, required: true, placeholder: 'Какую проблему нужно решить, для кого и что уже есть'});
-  const industry = el('input', {id: 'bp-industry', required: true, placeholder: 'Например: логистика'});
+  const text = el('textarea', {id: 'bp-text', rows: 5, required: true, placeholder: 'Например: «Нужен чат-бот для нашего магазина, чтобы отвечал клиентам». Можно коротко — система задаст вопросы.'});
+  const industry = el('input', {id: 'bp-industry', required: true, placeholder: 'Например: логистика', autocomplete: 'off'});
   const clarifyBtn = el('button', {type: 'submit', class: 'bp-primary', text: 'Уточнить задачу'});
-  const inputForm = el('form', {class: 'bp-form'},
-    el('label', {for: 'bp-text', text: 'Описание задачи'}), text,
-    el('label', {for: 'bp-industry', text: 'Отрасль'}), industry,
-    el('div', {class: 'bp-actions'}, clarifyBtn));
+  const inputForm = el('form', {class: 'bp-form bp-intro'},
+    el('div', {class: 'bp-intro-copy'},
+      el('h3', {id: 'bp-input-h', text: 'Опишите задачу как есть'}),
+      el('p', {class: 'muted', text: 'Система найдёт, чего не хватает, и задаст уточняющие вопросы. AI не добавляет фактов от себя: каждое поле карточки ссылается на ваш текст, а баллы начисляются только за поля, которые вы подтвердили.'}),
+      el('ul', {class: 'bp-scale'},
+        ...[['draft', '0–39', 'видна, но требует уточнения'], ['working', '40–69', 'можно рекомендовать командам'],
+          ['ready', '70–89', 'выше в каталоге'], ['priority', '90–100', 'выделяется в каталоге']]
+          .map(([lvl, range, note]) => el('li', {}, stamp(lvl), el('span', {class: 'num', text: range}), el('span', {class: 'muted', text: note}))))),
+    el('div', {class: 'bp-intro-form'},
+      el('label', {for: 'bp-text', text: 'Описание задачи'}), text,
+      el('label', {for: 'bp-industry', text: 'Отрасль'}), industry,
+      el('div', {class: 'bp-actions'}, clarifyBtn)));
   inputStep.append(inputForm);
+  industry.addEventListener('input', renderSteps);
 
   inputForm.addEventListener('submit', event => {
     event.preventDefault();
@@ -144,6 +218,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       }
       const result = await api.clarifyDraft(state.draftId);
       state.questions = result.questions || [];
+      state.questionCount = state.questions.length;
       state.questionsReady = true;
       text.readOnly = industry.readOnly = true;
       renderQuestions(result);
@@ -156,15 +231,16 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     const list = el('ol', {class: 'bp-questions'});
     for (const q of state.questions) {
       const id = 'bp-q-' + q.id;
-      const area = el('textarea', {id, rows: 3});
+      const area = el('textarea', {id, rows: 2});
       answers.set(q.id, area);
       list.append(el('li', {},
         el('label', {for: id, text: q.question}),
-        el('span', {class: 'bp-hint', text: 'Поле карточки: ' + (FIELD_LABEL[q.field] || q.field)}),
+        el('span', {class: 'bp-hint', text: '→ поле «' + (FIELD_LABEL[q.field] || q.field) + '»'}),
         area));
     }
     const buildBtn = el('button', {type: 'submit', class: 'bp-primary', text: 'Собрать карточку'});
-    const form = el('form', {class: 'bp-form'}, list, el('div', {class: 'bp-actions'}, buildBtn));
+    const form = el('form', {class: 'bp-form'}, list,
+      el('div', {class: 'bp-actions'}, buildBtn, el('span', {class: 'bp-hint', text: 'Можно ответить не на все вопросы — пустые поля останутся пустыми.'})));
     form.addEventListener('submit', event => {
       event.preventDefault();
       if (state.busy || state.card) return;
@@ -177,8 +253,9 @@ export function mountBusiness(root, api, onPublished = () => {}) {
         showCard(card, null);
       });
     });
-    questionStep.replaceChildren(el('h3', {text: 'Уточняющие вопросы'}), badges(result),
-      el('p', {class: 'bp-hint', text: 'Ответьте на вопросы — ответы станут источниками для полей карточки.'}), form);
+    questionStep.replaceChildren(
+      el('div', {class: 'bp-section-head'}, el('h3', {id: 'bp-questions-h', text: 'Уточняющие вопросы'}), badges(result)),
+      el('p', {class: 'bp-hint', text: 'Ответы станут источниками для полей карточки. Черновик: «' + text.value.trim() + '»'}), form);
     questionStep.hidden = false;
   }
 
@@ -191,15 +268,26 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     syncSteps();
   }
 
+  function gainsOf(card) {
+    return Object.fromEntries((card.rating?.gains || []).map(g => [g.field, g.points]));
+  }
+
   function renderCard(previousTotal) {
     const card = state.card;
-    const fieldsBox = el('div', {class: 'bp-fields'});
-    for (const [key, label] of FIELDS) fieldsBox.append(renderField(card, key, label));
+    const gains = gainsOf(card);
+    const confirmed = new Set(card.confirmed_fields || []);
+    const groups = {review: [], empty: [], done: []};
+    for (const [key, label] of FIELDS.slice(1)) {
+      const filled = (card[key] || '').trim();
+      groups[!filled ? 'empty' : confirmed.has(key) ? 'done' : 'review'].push(renderField(card, key, label, gains[key]));
+    }
+    const group = (key, title, note, rows) => rows.length ? el('section', {class: 'bp-group bp-group-' + key},
+      el('header', {}, el('h4', {text: title + ' · ' + rows.length}), el('span', {class: 'bp-hint', text: note})), ...rows) : null;
 
     const saveBtn = el('button', {type: 'button', text: 'Сохранить изменения'});
-    const confirmBtn = el('button', {type: 'button', text: 'Подтвердить отмеченные'});
-    const publishBtn = el('button', {type: 'button', class: 'bp-primary', text: card.published ? 'Опубликовать изменения' : 'Опубликовать'});
-    const published = el('p', {class: 'bp-success', role: 'status', hidden: true});
+    const confirmBtn = el('button', {type: 'button', class: 'bp-primary', text: 'Подтвердить отмеченные'});
+    const publishBtn = el('button', {type: 'button', text: card.published ? 'Опубликовать изменения' : 'Опубликовать'});
+    const published = el('p', {class: 'bp-success msg msg-ok', role: 'status', hidden: true});
 
     saveBtn.addEventListener('click', () => {
       if (!state.dirty.size) { status.textContent = 'Нет несохранённых изменений'; return; }
@@ -211,8 +299,8 @@ export function mountBusiness(root, api, onPublished = () => {}) {
         if (state.conflict) throw new Error('Сначала загрузите актуальную карточку');
         if (!state.checked.size) throw new Error('Отметьте хотя бы одно заполненное неподтверждённое поле');
         await saveChanges();
-        const confirmed = new Set(state.card.confirmed_fields || []);
-        const fields = [...state.checked].filter(f => !confirmed.has(f) && (state.card[f] || '').trim());
+        const confirmedNow = new Set(state.card.confirmed_fields || []);
+        const fields = [...state.checked].filter(f => !confirmedNow.has(f) && (state.card[f] || '').trim());
         if (!fields.length) throw new Error('Отметьте хотя бы одно заполненное неподтверждённое поле');
         const before = state.card.rating.total;
         showCard(await api.confirmCard(state.card.id, {fields}), before);
@@ -226,22 +314,35 @@ export function mountBusiness(root, api, onPublished = () => {}) {
         const card = await api.publishCard(state.card.id);
         showCard(card, null);
         const done = cardStep.querySelector('.bp-success');
-        done.textContent = 'Карточка «' + (card.title || 'без названия') + '» опубликована. Она появилась в каталоге для учебных команд.';
+        done.textContent = 'Карточка «' + (card.title || 'без названия') + '» опубликована с рейтингом ' + card.rating.total + '. Открываем её в каталоге.';
         done.hidden = false;
         onPublished(card);
       });
     });
 
+    const checkAll = el('button', {type: 'button', class: 'bp-link', text: 'Отметить все для подтверждения'});
+    checkAll.addEventListener('click', () => {
+      for (const box of cardStep.querySelectorAll('.bp-check input:not(:disabled)')) {
+        box.checked = true;
+        box.dispatchEvent(new Event('change'));
+      }
+    });
+
     cardStep.replaceChildren(...[
-      el('h3', {text: 'Карточка задачи'}),
-      badges(card),
-      card.published ? el('p', {class: 'bp-hint', text: card.has_unpublished_changes ? 'Опубликована, есть неопубликованные изменения.' : 'Опубликована.'}) : null,
+      el('div', {class: 'bp-section-head'}, el('h3', {id: 'bp-card-h', text: 'Карточка задачи'}), badges(card)),
+      card.published ? el('p', {class: 'bp-hint', text: card.has_unpublished_changes ? 'Опубликована, есть неопубликованные изменения.' : 'Опубликована и видна командам.'}) : null,
       warnings(card),
-      el('p', {class: 'bp-hint', text: 'Проверьте каждое поле. После правки поле нужно сохранить и подтвердить заново. Опубликовать можно карточку с названием, где подтверждены все заполненные поля.'}),
-      el('div', {class: 'bp-layout'}, fieldsBox, renderRating(card.rating, previousTotal)),
-      unconfirmedHint(card),
-      el('div', {class: 'bp-actions'}, saveBtn, confirmBtn, publishBtn),
-      published].filter(Boolean));
+      el('div', {class: 'bp-layout'},
+        el('div', {class: 'bp-fields'},
+          renderField(card, 'title', FIELD_LABEL.title, undefined, true),
+          group('review', 'Проверьте и подтвердите', 'баллы начислятся после подтверждения', groups.review),
+          group('empty', 'Пусто', 'заполните, чтобы поднять рейтинг', groups.empty),
+          group('done', 'Подтверждено', 'правка снимет подтверждение', groups.done),
+          el('div', {class: 'bp-actionbar'},
+            unconfirmedHint(card),
+            el('div', {class: 'bp-actions'}, checkAll, saveBtn, confirmBtn, publishBtn)),
+          published),
+        renderRating(card.rating, previousTotal))].filter(Boolean));
     cardStep.hidden = false;
     lockControls();
   }
@@ -259,22 +360,26 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     renderCard(before);
   }
 
-  function renderField(card, key, label) {
+  function renderField(card, key, label, gain, isTitle = false) {
     const id = 'bp-f-' + key;
     const value = card[key] || '';
     const input = LONG_FIELDS.has(key)
-      ? el('textarea', {id, rows: 3, value})
-      : el('input', {id, value});
+      ? el('textarea', {id, rows: value.length > 120 ? 3 : 2, value, placeholder: FIELD_HINT[key] || ''})
+      : el('input', {id, value, placeholder: isTitle ? 'Короткое название задачи' : FIELD_HINT[key] || ''});
     input.dataset.field = key;
     const confirmedOnServer = (card.confirmed_fields || []).includes(key);
     const check = el('input', {type: 'checkbox', id: id + '-ok', checked: state.checked.has(key), disabled: confirmedOnServer || !value.trim()});
-    const confirmationStatus = el('p', {class: 'bp-confirmation', text: confirmedOnServer ? 'Подтверждено бизнесом' : 'Не подтверждено'});
-    const row = el('div', {class: 'bp-field' + (confirmedOnServer ? ' bp-confirmed' : '')},
-      el('label', {for: id, class: 'bp-field-label', text: label}),
+    const confirmationStatus = el('span', {class: 'bp-confirmation', text: confirmedOnServer ? '✓ Подтверждено' : value.trim() ? 'Не подтверждено' : ''});
+    const gainTag = gain ? el('span', {class: 'tag tag-gain num', text: '+' + gain}) : null;
+    const row = el('div', {class: 'bp-field' + (confirmedOnServer ? ' bp-confirmed' : '') + (isTitle ? ' bp-field-title' : '') + (!value.trim() ? ' bp-empty' : '')},
+      el('div', {class: 'bp-field-head'},
+        el('label', {for: id, class: 'bp-field-label', text: label}),
+        isTitle ? el('span', {class: 'bp-hint', text: 'не даёт баллов, но нужно для публикации'}) : gainTag),
       input,
-      evidence(card.evidence && card.evidence[key]),
-      confirmationStatus,
-      el('label', {class: 'bp-check', for: id + '-ok'}, check, document.createTextNode(' Подтвердить это поле')));
+      value.trim() ? evidence(card.evidence && card.evidence[key]) : null,
+      el('div', {class: 'bp-field-foot'},
+        confirmationStatus,
+        el('label', {class: 'bp-check', for: id + '-ok'}, check, document.createTextNode(' Подтвердить это поле'))));
 
     input.addEventListener('input', () => {
       state.dirty.add(key);
@@ -287,15 +392,15 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     });
     check.addEventListener('change', () => {
       if (check.checked) state.checked.add(key); else state.checked.delete(key);
+      row.classList.toggle('bp-marked', check.checked);
     });
     return row;
   }
 
   function evidence(item) {
-    if (!item || !item.quote) return el('p', {class: 'bp-evidence bp-evidence-none', text: 'Источник не найден — заполните вручную'});
-    const source = String(item.source_id || '').startsWith('manual:') ? 'введено вручную' : 'источник: ' + item.source_id;
+    if (!item || !item.quote) return el('p', {class: 'bp-evidence bp-evidence-none', text: 'Источник не найден — проверьте поле вручную'});
     return el('p', {class: 'bp-evidence'},
-      el('span', {class: 'bp-source', text: source}),
+      el('span', {class: 'bp-source', text: sourceLabel(item.source_id)}),
       el('q', {text: item.quote}));
   }
 
@@ -310,35 +415,67 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     const confirmed = new Set(card.confirmed_fields || []);
     const left = FIELDS.filter(([k]) => (card[k] || '').trim() && !confirmed.has(k)).map(([, l]) => l);
     if (!(card.title || '').trim()) left.unshift('укажите название');
-    if (!left.length) return el('p', {class: 'bp-hint', text: 'Все заполненные поля подтверждены — можно публиковать.'});
+    if (!left.length) return el('p', {class: 'bp-hint bp-ready', text: 'Все заполненные поля подтверждены — можно публиковать.'});
     return el('p', {class: 'bp-hint', text: 'Перед публикацией: ' + left.join(', ') + '.'});
+  }
+
+  function focusField(key) {
+    const input = cardStep.querySelector('[data-field="' + key + '"]');
+    if (!input) return;
+    input.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center'});
+    input.focus({preventScroll: true});
   }
 
   function renderRating(rating, previousTotal) {
     const box = el('aside', {class: 'bp-rating', 'aria-label': 'Рейтинг готовности'});
     if (!rating) return box;
     const total = el('div', {class: 'bp-total'},
-      el('strong', {text: String(rating.total)}),
-      el('span', {text: '/100'}));
-    box.append(el('h4', {text: 'Готовность задачи'}), total,
-      el('p', {class: 'bp-level bp-level-' + rating.level, text: LEVELS[rating.level] || rating.level}));
+      el('strong', {class: 'num', text: String(rating.total)}),
+      el('span', {class: 'num', text: '/100'}));
     if (previousTotal != null) {
       const diff = rating.total - previousTotal;
-      box.append(el('p', {class: 'bp-delta' + (diff > 0 ? ' bp-up' : diff < 0 ? ' bp-down' : ''),
-        text: diff === 0 ? 'Баллы не изменились' : (diff > 0 ? '+' : '−') + Math.abs(diff) + ' ' + points(Math.abs(diff))}));
+      total.append(el('span', {class: 'bp-delta num' + (diff > 0 ? ' bp-up' : diff < 0 ? ' bp-down' : ''), role: 'status',
+        text: diff === 0 ? '±0' : (diff > 0 ? '+' : '−') + Math.abs(diff), title: diff === 0 ? 'Баллы не изменились' : Math.abs(diff) + ' ' + points(Math.abs(diff))}));
     }
+    box.append(el('h4', {text: 'Готовность задачи'}), total, ruler(rating.total, rating.level, {ticks: true}), stamp(rating.level));
+
+    const gains = rating.gains || [];
+    if (rating.next_level) {
+      const n = rating.points_to_next;
+      const enough = gains.find(g => g.points >= n);
+      box.append(el('p', {class: 'bp-next'},
+        document.createTextNode('До «' + LEVELS[rating.next_level] + '» — '), el('b', {class: 'num', text: n + ' ' + points(n)}),
+        document.createTextNode(enough ? '. Хватит поля «' + FIELD_LABEL[enough.field] + '».' : '.')));
+    } else if (rating.total >= 90) {
+      box.append(el('p', {class: 'bp-next', text: 'Максимальный уровень: задача выделяется в каталоге.'}));
+    }
+    if (gains.length) {
+      const list = el('ul', {class: 'bp-gains', 'aria-label': 'Что добавит баллы'});
+      for (const g of gains) {
+        const go = el('button', {type: 'button', class: 'bp-gain'},
+          el('span', {text: FIELD_LABEL[g.field] || g.field}), el('span', {class: 'tag tag-gain num', text: '+' + g.points}));
+        go.addEventListener('click', () => focusField(g.field));
+        list.append(el('li', {}, go));
+      }
+      box.append(el('p', {class: 'eyebrow', text: 'Что добавит баллы'}), list);
+    } else if (rating.missing_fields?.length) {
+      box.append(el('p', {class: 'bp-missing', text: 'Не хватает: ' + rating.missing_fields.map(f => FIELD_LABEL[f] || f).join(', ')}));
+    }
+
+    const breakdown = el('details', {class: 'bp-breakdown'}, el('summary', {text: 'Как посчитано'}));
     const items = el('ul', {class: 'bp-items'});
     for (const item of rating.items || []) {
       const bar = el('div', {class: 'bp-bar'}, el('span', {style: 'width:' + (item.maximum ? Math.round(100 * item.earned / item.maximum) : 0) + '%'}));
+      const fields = [...(item.confirmed_fields || []).map(f => '✓ ' + (FIELD_LABEL[f] || f)), ...(item.missing_fields || []).map(f => '○ ' + (FIELD_LABEL[f] || f))];
       items.append(el('li', {},
-        el('div', {class: 'bp-item-head'}, el('span', {text: item.label}), el('span', {text: item.earned + '/' + item.maximum})),
+        el('div', {class: 'bp-item-head'}, el('span', {text: item.label}), el('span', {class: 'num', text: item.earned + '/' + item.maximum})),
         bar,
-        el('p', {class: 'bp-hint', text: item.explanation})));
+        el('p', {class: 'bp-hint', text: fields.join(' · ')})));
     }
-    box.append(items);
-    if (rating.missing_fields && rating.missing_fields.length) {
-      box.append(el('p', {class: 'bp-missing', text: 'Не хватает: ' + rating.missing_fields.map(f => FIELD_LABEL[f] || f).join(', ')}));
-    }
+    breakdown.append(items, el('p', {class: 'bp-hint', text: 'Баллы начисляются только за поля, подтверждённые человеком. Название баллов не даёт.'}));
+    box.append(breakdown);
     return box;
   }
+
+  syncSteps();
 }

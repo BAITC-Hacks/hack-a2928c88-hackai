@@ -75,7 +75,8 @@ def main():
         page.get_by_role('button', name='Опубликовать', exact=True).click()
         card = page.locator('.catalog-card').filter(has_text=unique)
         expect(card).to_be_visible()
-        card.get_by_role('button', name='Посмотреть задачу', exact=True).click()
+        expect(page.locator('.catalog-detail h3')).to_have_text(unique)
+        page.get_by_role('tab', name='Откликнуться', exact=True).click()
         page.locator('.catalog-proposal-form select').select_option(index=1)
         proposal_title = 'Учебный прототип ' + unique
         page.locator('[name=idea]').fill(proposal_title)

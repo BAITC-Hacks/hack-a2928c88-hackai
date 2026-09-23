@@ -6,12 +6,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends, Query, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field, HttpUrl
 from app.llm import Extractor
 from app.rating import calculate_rating, confirm_fields, edit_card, is_confirmed
+from app.recommend import recommend
 from app.schemas import Model, Draft, TaskCard, CardContent, CardField, Proposal, TeamProfile, NonEmpty
 from app.store import Store
 
@@ -195,12 +196,41 @@ def create_app(database_path=None, seed_demo=None, extractor=None):
             Store.put(db, "card", card.id, new)
         return card_view(new)
 
+    def published(db):
+        counts = {}
+        for p in Store.all(db, "proposal"):
+            counts[p["task_id"]] = counts.get(p["task_id"], 0) + 1
+        cards = [{**r["snapshot"], "proposals_count": counts.get(r["snapshot"]["id"], 0)}
+                 for r in Store.all(db, "card") if r.get("snapshot")]
+        return sorted(cards, key=lambda c: (-c["rating"]["total"], c.get("first_published_at", ""), c["id"]))
+
+    def matches(card, q):
+        text = " ".join(str(card.get(k, "")) for k in ("title", "industry", "context", "need", "data", "expected_result"))
+        return q in text.casefold()
+
     @app.get("/api/cards")
-    def list_cards(industry: str = "", level: str = ""):
+    def list_cards(response: Response, industry: str = "", level: str = "",
+                   q: str = Query(default="", max_length=200),
+                   limit: int | None = Query(default=None, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+        # Without limit the full ranked list is returned, as before; the total is always in a header.
         with store.transaction() as db:
-            cards = [r["snapshot"] for r in Store.all(db, "card") if r.get("snapshot")]
-        return sorted([c for c in cards if (not industry or c["industry"] == industry) and
-            (not level or c["rating"]["level"] == level)], key=lambda c: (-c["rating"]["total"], c.get("first_published_at", ""), c["id"]))
+            cards = published(db)
+        needle = q.strip().casefold()
+        found = [c for c in cards if (not industry or c["industry"] == industry) and
+                 (not level or c["rating"]["level"] == level) and (not needle or matches(c, needle))]
+        response.headers["X-Total-Count"] = str(len(found))
+        return found[offset:offset + limit] if limit else found[offset:]
+
+    @app.get("/api/catalog/facets")
+    def facets():
+        with store.transaction() as db:
+            cards = published(db)
+        industries, levels = {}, {"draft": 0, "working": 0, "ready": 0, "priority": 0}
+        for c in cards:
+            industries[c["industry"]] = industries.get(c["industry"], 0) + 1
+            levels[c["rating"]["level"]] += 1
+        ranked = sorted(industries.items(), key=lambda item: (-item[1], item[0]))
+        return {"total": len(cards), "industries": [{"name": n, "count": k} for n, k in ranked], "levels": levels}
 
     @app.get("/api/cards/{id}")
     def get_card(id: str):
@@ -261,6 +291,13 @@ def create_app(database_path=None, seed_demo=None, extractor=None):
     def teams():
         with store.transaction() as db:
             return Store.all(db, "team")
+
+    @app.get("/api/teams/{id}/recommendations")
+    def recommendations(id: str, limit: int = Query(default=10, ge=1, le=50)):
+        with store.transaction() as db:
+            team = require(db, "team", id)
+            cards = published(db)
+        return recommend(team, cards, limit)
 
     def proposal_view(db, item):
         return {**item, "team_name": require(db, "team", item["team_id"])["name"]}

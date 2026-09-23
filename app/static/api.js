@@ -1,6 +1,6 @@
 // Shared contract from docs/TEAM.md. Screens never calculate scores themselves.
 const revisions = new Map();
-async function request(path, {method = 'GET', body, role, cardId} = {}) {
+async function request(path, {method = 'GET', body, role, cardId, withTotal = false} = {}) {
   const headers = {'Content-Type': 'application/json'};
   if (role) headers['X-Demo-Role'] = role;
   if (cardId) {
@@ -30,8 +30,11 @@ async function request(path, {method = 'GET', body, role, cardId} = {}) {
     throw error;
   }
   if (data.id && data.revision) revisions.set(data.id, data.revision);
+  if (withTotal) return {items: data, total: Number(response.headers.get('X-Total-Count') ?? data.length)};
   return data;
 }
+// Drops empty filters so the query string stays readable.
+const query = params => new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null));
 const id = encodeURIComponent;
 export const api = {
   createDraft: body => request('/drafts', {method:'POST', body, role:'business'}),
@@ -42,6 +45,11 @@ export const api = {
   confirmCard: (cardId, body) => request(`/cards/${id(cardId)}/confirm`, {method:'POST', body, role:'business', cardId}),
   publishCard: cardId => request(`/cards/${id(cardId)}/publish`, {method:'POST', role:'business', cardId}),
   listCards: (filters = {}) => request('/cards?' + new URLSearchParams(filters)),
+  /** One catalog page: {items, total}. Ranking stays on the server. */
+  listCardsPage: ({q = '', industry = '', level = '', limit = 20, offset = 0} = {}) =>
+    request('/cards?' + query({q, industry, level, limit, offset}), {withTotal: true}),
+  catalogFacets: () => request('/catalog/facets'),
+  teamRecommendations: (teamId, limit = 5) => request(`/teams/${id(teamId)}/recommendations?limit=${limit}`),
   listTeams: () => request('/teams'),
   createProposal: (cardId, body) => request(`/cards/${id(cardId)}/proposals`, {method:'POST', body, role:'team'}),
   listProposals: cardId => request(`/cards/${id(cardId)}/proposals`),

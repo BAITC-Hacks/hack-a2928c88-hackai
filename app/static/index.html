@@ -1,34 +1,106 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Sana Hub — паспорт готовности задачи</title>
+  <meta name="description" content="Бизнес описывает задачу, система задаёт уточняющие вопросы и считает рейтинг готовности 0–100. Студенческие команды откликаются, бизнес выбирает вручную.">
+  <meta name="theme-color" content="#25274D">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2325274D'/%3E%3Crect x='6' y='19' width='20' height='5' rx='1' fill='%23464866'/%3E%3Crect x='6' y='19' width='14' height='5' rx='1' fill='%232E9CCA'/%3E%3Crect x='19' y='16' width='2' height='11' fill='%23fff'/%3E%3Cpath d='M9 8h14v3H9z' fill='%23AAABB8'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+  <link rel="stylesheet" href="/static/ui.css">
   <style>
-    :root{font-family:system-ui,sans-serif;color:#19372e;background:#f4f7f4}body{margin:0}header,main,footer{max-width:1120px;margin:auto;padding:24px}header{border-bottom:1px solid #cad9cd}h1{margin:0;font-size:34px}h1 span{color:#227a50}p{line-height:1.55}.notice{padding:12px 16px;background:#fff4cf;border-radius:10px}nav{display:flex;gap:12px;flex-wrap:wrap}button,a{font:inherit}button{padding:10px 18px;border:1px solid #abc2b0;border-radius:8px;background:white;cursor:pointer}button[aria-selected=true]{background:#205c42;color:white}section{margin-top:24px;padding:24px;background:white;border:1px solid #d5e1d8;border-radius:14px}a{color:#205c42}[hidden]{display:none!important}footer{font-size:14px;color:#52685a}
+    .skip{position:absolute;left:16px;top:-60px;z-index:100;background:var(--ink);color:#fff;padding:10px 14px;border-radius:var(--r-md)}
+    .skip:focus{top:12px}
+    .app-top{position:sticky;top:0;z-index:var(--z-bar);background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+    .app-top-in{max-width:1280px;margin:auto;display:flex;align-items:center;gap:20px;padding:10px 24px}
+    .logo{font:600 18px/1 var(--f-display);letter-spacing:-.01em;color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:10px}
+    .logo b{color:var(--accent);font-weight:600}
+    .logo svg{flex:none}
+    .roles{display:inline-flex;background:var(--sunk);border-radius:11px;padding:3px;gap:2px}
+    .roles button{min-height:34px;padding:6px 16px;border:0;border-radius:8px;background:none;color:var(--ink-2);font-weight:500;cursor:pointer;transition:background-color .2s var(--ease),color .2s var(--ease)}
+    .roles button:hover{color:var(--ink)}
+    .roles button[aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(37,39,77,.14)}
+    .roles small{display:block;font-size:11px;font-weight:400;color:var(--ink-2)}
+    .roles button[aria-selected=true] small{color:var(--ink-2)}
+    .top-meta{margin-left:auto;display:flex;align-items:center;gap:10px}
+    .demo-note{background:var(--ink);color:#E6E7F0;font-size:13px}
+    .demo-note p{max-width:1280px;margin:auto;padding:7px 24px}
+    .demo-note b{color:#fff;font-weight:600}
+    main{max-width:1280px;margin:auto;padding:24px 24px 48px}
+    footer{max-width:1280px;margin:auto;padding:0 24px 40px;font-size:13px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:6px 18px}
+    .boot-error{padding:24px;border:1px dashed var(--line-strong);border-radius:var(--r-lg);background:var(--surface)}
+    @media (max-width:760px){
+      /* backdrop-filter would make the header the containing block of the fixed role bar */
+      .app-top{backdrop-filter:none;background:var(--surface)}
+      .app-top-in{padding:10px 16px;gap:12px}
+      .roles{position:fixed;left:0;right:0;bottom:0;border-radius:0;padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line);z-index:var(--z-bar);box-shadow:0 -8px 24px -18px rgba(37,39,77,.5)}
+      .roles button{flex:1;min-height:44px}
+      .top-meta .api-link{display:none}
+      .demo-note p{padding:6px 16px}
+      main{padding:16px 16px 96px}
+      footer{padding:0 16px 96px}
+    }
   </style>
 </head>
 <body>
-<header><h1>Sana <span>Hub</span></h1><p>От бизнес-задачи к студенческому прототипу. Прозрачная готовность, осознанный выбор.</p>
-<p class="notice">Учебное демо: примеры синтетические. Роли открыты для проверки, входа по паролю нет. Режим AI указан у результата.</p>
-<nav aria-label="Разделы"><button id="business-tab" aria-selected="true">Для бизнеса</button><button id="catalog-tab" aria-selected="false">Каталог и команды</button><a href="/docs">Проверить API</a></nav></header>
-<main><section id="business" class="business-panel" aria-label="Бизнес"></section><section id="catalog" class="catalog-panel" aria-label="Каталог" hidden></section></main>
-<footer>AI помогает уточнять. Бизнес подтверждает факты и выбирает команды. Баллы рассчитывает код.</footer>
+<a class="skip" href="#main">К содержимому</a>
+<header class="app-top">
+  <div class="app-top-in">
+    <a class="logo" href="#business" aria-label="Sana Hub — на главную">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#25274D"/><rect x="6" y="19" width="20" height="5" rx="1" fill="#464866"/><rect x="6" y="19" width="14" height="5" rx="1" fill="#2E9CCA"/><rect x="19" y="16" width="2" height="11" fill="#fff"/><path d="M9 8h14v3H9z" fill="#AAABB8"/></svg>
+      <span>Sana <b>Hub</b></span>
+    </a>
+    <nav class="roles" role="tablist" aria-label="Роль в демо">
+      <button id="business-tab" role="tab" aria-selected="true" aria-controls="business">Бизнесу</button>
+      <button id="catalog-tab" role="tab" aria-selected="false" aria-controls="catalog">Командам</button>
+    </nav>
+    <div class="top-meta">
+      <span class="tag" title="Все организации, команды и отклики в демо вымышлены">Демо · синтетика</span>
+      <a class="api-link" href="/docs">API</a>
+    </div>
+  </div>
+</header>
+<div class="demo-note"><p><b>Учебное демо.</b> Примеры синтетические, роли открыты без входа. Режим AI (live или mock) указан у каждого результата.</p></div>
+<main id="main" tabindex="-1">
+  <section id="business" role="tabpanel" aria-labelledby="business-tab"></section>
+  <section id="catalog" role="tabpanel" aria-labelledby="catalog-tab" hidden></section>
+</main>
+<footer><span>AI помогает уточнять задачу. Бизнес подтверждает факты и выбирает команды.</span><span>Баллы готовности считает код, не модель.</span></footer>
 <script type="module">
 import {api} from '/static/api.js';
-const business = document.querySelector('#business'), catalog = document.querySelector('#catalog');
+const screens = ['business', 'catalog'];
 let catalogScreen;
-function show(name){for(const n of ['business','catalog']){document.getElementById(n).hidden=n!==name;document.getElementById(n+'-tab').setAttribute('aria-selected',String(n===name));}}
-document.querySelector('#business-tab').onclick=()=>show('business');
-document.querySelector('#catalog-tab').onclick=()=>{show('catalog');catalogScreen?.refresh();};
-async function mount(name, callback){
-  const root=document.getElementById(name);
-  try{
-    const module=await import(`/static/${name}.js`);
-    const css=document.createElement('link');css.rel='stylesheet';css.href=`/static/${name}.css`;document.head.append(css);
-    await callback(module,root);
-  }catch(error){root.textContent='Экран ещё подключается командой. Backend доступен по ссылке «Проверить API». '+error.message;}
+function show(name, {focus = false} = {}) {
+  for (const n of screens) {
+    document.getElementById(n).hidden = n !== name;
+    document.getElementById(n + '-tab').setAttribute('aria-selected', String(n === name));
+  }
+  if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+  if (focus) document.getElementById('main').focus({preventScroll: true});
 }
-await mount('catalog',async(m,root)=>{catalogScreen=await m.mountCatalog(root,api);});
-await mount('business',(m,root)=>m.mountBusiness(root,api,()=>{show('catalog');catalogScreen?.refresh();}));
+document.querySelector('#business-tab').onclick = () => show('business');
+document.querySelector('#catalog-tab').onclick = () => { show('catalog'); catalogScreen?.refresh(); };
+addEventListener('hashchange', () => { const n = location.hash.slice(1); if (screens.includes(n)) show(n); });
+async function mount(name, callback) {
+  const root = document.getElementById(name);
+  try {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = `/static/${name}.css`; document.head.append(css);
+    const module = await import(`/static/${name}.js`);
+    await callback(module, root);
+  } catch (error) {
+    root.replaceChildren(Object.assign(document.createElement('p'), {className: 'boot-error',
+      textContent: 'Экран не загрузился. Backend доступен по ссылке API. ' + error.message}));
+  }
+}
+await mount('catalog', async (m, root) => { catalogScreen = await m.mountCatalog(root, api); });
+await mount('business', (m, root) => m.mountBusiness(root, api, card => {
+  show('catalog', {focus: true});
+  catalogScreen?.focusCard(card);
+}));
+if (location.hash === '#catalog') show('catalog');
 </script>
-</body></html>
+</body>
+</html>
