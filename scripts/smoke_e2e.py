@@ -1,4 +1,4 @@
-"""Full browser scenario on localhost only. With --mode live this spends two AI calls."""
+"""Full browser scenario. Remote writes require --allow-remote; live spends two AI calls."""
 import argparse
 import json
 from pathlib import Path
@@ -10,9 +10,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--url', default='http://127.0.0.1:8002')
     parser.add_argument('--mode', choices=['live', 'mock'], default='mock')
+    parser.add_argument('--allow-remote', action='store_true', help='Explicitly allow creating synthetic demo records on the supplied HTTPS site')
     args = parser.parse_args()
     if not args.url.startswith(('http://127.0.0.1:', 'http://localhost:')):
-        parser.error('Creates demo records; localhost only')
+        if not args.allow_remote or not args.url.startswith('https://'):
+            parser.error('Remote demo writes require HTTPS and --allow-remote')
     unique = 'Синтетическая задача ' + str(uuid4())[:8]
     values = {
         'title': unique,
@@ -33,6 +35,12 @@ def main():
         page.set_default_timeout(20000)
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
+        # Mark the automated sample explicitly, including the stored record.
+        def synthetic_draft(route):
+            data = route.request.post_data_json
+            data['synthetic'] = True
+            route.continue_(post_data=json.dumps(data))
+        page.route('**/api/drafts', synthetic_draft)
         page.goto(args.url)
         page.locator('#bp-text').fill('Синтетический пример: нужен чат-бот для нашего учебного магазина.')
         page.locator('#bp-industry').fill('Учебная торговля')
@@ -47,6 +55,7 @@ def main():
             page.get_by_role('button', name='Собрать карточку', exact=True).click()
         built = pending.value.json()
         assert pending.value.ok and built['mode'] == args.mode, built
+        assert built['synthetic'] is True
         expect(page.locator('.bp-total strong')).to_have_text('0')
         # Human edits are explicit; no AI-invented fields are silently introduced.
         for field, value in values.items():
@@ -93,7 +102,8 @@ def main():
         assert not errors, errors
         Path('logs').mkdir(exist_ok=True)
         page.screenshot(path='logs/e2e-' + args.mode + '.png', full_page=True)
-        print(json.dumps({'e2e':'passed','mode':args.mode,'provider':built['provider'],
+        print(json.dumps({'e2e':'passed','url':args.url,'card_id':built['id'],'synthetic':built['synthetic'],
+            'mode':args.mode,'provider':built['provider'],'clarification_provider':clarification['provider'],
             'score_sequence':[0,100,80,100],'manual_selection':True,'progress_points':10},ensure_ascii=True))
         browser.close()
 
