@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: sana-hub
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: MOCK
+        value: "1"
+      - key: FALLBACK_TO_MOCK
+        value: "1"
+      - key: DATABASE_PATH
+        value: /data/sana.sqlite3
+      - key: SEED_DEMO
+        value: "1"
+# No disk is provisioned here: demo state is ephemeral on this configuration.

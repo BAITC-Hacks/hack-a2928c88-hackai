@@ -13,3 +13,7 @@ docs/site-records.json
 docs/site-page.js
 docs/site-visible.txt
 coord/**/*.log
+data/runtime/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
