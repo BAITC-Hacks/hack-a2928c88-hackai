@@ -489,7 +489,7 @@ def register_project_letters(app, store, require, actor, owner, audit, notify):
             return letter
 
     def canonical_url(code):
-        origin = os.getenv("APP_PUBLIC_URL", "http://localhost:8008").rstrip("/")
+        origin = os.getenv("APP_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
         parsed = urlsplit(origin)
         if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise HTTPException(503, "Некорректный APP_PUBLIC_URL для QR-кода")
