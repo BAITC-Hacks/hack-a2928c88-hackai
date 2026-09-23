@@ -38,3 +38,9 @@
 - Выданный GitHub-репозиторий PRIVATE, права WRITE. Подготовлен deploy без подключения GitHub App: Render Existing Image.
 - Docker Hub login проверен без вывода секретов: denryyyyyyy. Создан приватный sana-hub, собран и загружен docker.io/denryyyyyyy/sana-hub:0ca1dc1 (linux/amd64). Digest записан в docs/DEPLOY.md. .env отсутствует в образе.
 - Публичный URL Render ещё не получен. Образ содержит API и каталог, UI бизнеса пока ожидается. Сборка/загрузка образа не считается завершённым публичным деплоем.
+
+## 23.09.2026 14:42 — публичный Render доступен
+
+- Капитан передал https://sana-hub-0ca1dc1.onrender.com/ . API smoke passed; 5 карточек и 5 команд, mock.
+- В Edge по публичному URL загрузились каталог, детали и форма отклика. Записей на сервисе не создавали. business.js пока 404, полный UI-сценарий не заявляется готовым.
+- README и DEPLOY обновлены. Подробности coord/notes/render-smoke.md. Проверка отдельной независимой сети и постоянного диска остаётся открытой.

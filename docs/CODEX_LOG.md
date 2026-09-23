@@ -9,3 +9,5 @@
 - Интеграция и ревью каталога Nursaule aa34489, браузерный smoke в Edge, проверка Docker и HTTP, инструкция Render. Скрипты scripts/smoke_url.py и scripts/smoke_catalog.py; app/static/api.js. UI-файлы участника сохранены без правок.
 
 - Сверка полного PDF и аудит покрытия требований, фиксация первоисточника; подготовка scripts/build-image.ps1, приватного Docker Hub и linux/amd64-образа для Render Existing Image. Учётные данные использованы через credential helper, не записаны в исходники/логи.
+
+- Проверка публичного Render URL через HTTP и Edge/Playwright, фиксация фактических ограничений и ссылки в README/DEPLOY; coord/notes/render-smoke.md.
