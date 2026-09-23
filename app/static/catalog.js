@@ -6,6 +6,7 @@ const FIELDS = {
   interaction_format: 'Формат взаимодействия', feedback_process: 'Обратная связь',
 };
 const STATUSES = { pending: 'На рассмотрении', selected: 'Команда выбрана', rejected: 'Отклонён' };
+let fieldId = 0;
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -23,6 +24,7 @@ function button(text, action) {
 
 function labeled(text, input) {
   const label = element('label', undefined, 'catalog-field');
+  input.setAttribute('aria-label', text);
   label.append(element('span', text), input);
   return label;
 }
@@ -47,9 +49,17 @@ export function mountCatalog(root, api) {
   heading.append(element('p', 'AI SANA / КОМАНДАМ', 'catalog-eyebrow'), element('h2', 'Задачи бизнеса'),
     element('p', 'Найдите задачу, предложите решение и пройдите этапы вместе с бизнесом.'));
   const filters = element('form', undefined, 'catalog-filters');
-  const industry = element('input');
-  industry.type = 'search';
-  industry.placeholder = 'Например, образование';
+  const industry = element('select');
+  function setIndustries(values, selected) {
+    industry.replaceChildren();
+    for (const value of ['', ...values]) {
+      const option = element('option', value || 'Все отрасли');
+      option.value = value;
+      industry.append(option);
+    }
+    industry.value = selected;
+  }
+  setIndustries([], '');
   const level = element('select');
   for (const [value, text] of [['', 'Все уровни'], ...Object.entries(LEVELS)]) {
     const option = element('option', text);
@@ -58,7 +68,13 @@ export function mountCatalog(root, api) {
   }
   const apply = element('button', 'Показать задачи');
   apply.type = 'submit';
-  filters.append(labeled('Отрасль', industry), labeled('Готовность задачи', level), apply);
+  const reset = button('Сбросить фильтры', () => {
+    if (busy) return;
+    industry.value = '';
+    level.value = '';
+    void refresh();
+  });
+  filters.append(labeled('Отрасль', industry), labeled('Готовность задачи', level), apply, reset);
   const notice = element('p', '', 'catalog-notice');
   notice.setAttribute('role', 'status');
   notice.setAttribute('aria-live', 'polite');
@@ -167,6 +183,8 @@ export function mountCatalog(root, api) {
 
   function proposalForm(card) {
     const form = element('form', undefined, 'catalog-proposal-form');
+    // Validate explicitly so URL errors remain visible beside the field.
+    form.noValidate = true;
     form.append(element('h4', 'Предложить решение'));
     const team = element('select');
     team.required = true;
@@ -190,17 +208,35 @@ export function mountCatalog(root, api) {
     const inputs = {};
     for (const [key, label, tag] of [
       ['idea', 'Идея решения', 'textarea'], ['plan', 'План работы', 'textarea'],
-      ['timeline', 'Срок', 'input'], ['prototype_url', 'Ссылка на прототип (необязательно)', 'input'],
+      ['timeline', 'Срок', 'input'], ['prototype_url', 'Ссылка на прототип', 'input'],
     ]) {
       const input = element(tag);
       input.name = key;
-      input.required = key !== 'prototype_url';
+      input.required = true;
       if (tag === 'textarea') input.rows = 3;
       if (key === 'prototype_url') { input.type = 'url'; input.placeholder = 'https://'; }
       input.addEventListener('input', () => input.setCustomValidity(''));
       inputs[key] = input;
       form.append(labeled(label, input));
     }
+    const urlInput = inputs.prototype_url;
+    const urlError = element('small', '', 'catalog-field-error');
+    urlError.id = `catalog-prototype-error-${++fieldId}`;
+    urlError.setAttribute('aria-live', 'polite');
+    urlInput.setAttribute('aria-describedby', urlError.id);
+    urlInput.parentElement.append(urlError);
+    function validatePrototype() {
+      const value = urlInput.value.trim();
+      const message = !value ? 'Укажите ссылку на прототип.'
+        : !/^https?:\/\//i.test(value) || !safeLink(value)
+          ? 'Укажите корректную ссылку на прототип с http:// или https://.' : '';
+      urlError.textContent = message;
+      urlInput.setCustomValidity(message);
+      urlInput.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+    urlInput.addEventListener('input', () => {
+      if (urlError.textContent) validatePrototype();
+    });
     const submit = element('button', 'Отправить отклик');
     submit.type = 'submit';
     submit.disabled = !teams.length;
@@ -212,8 +248,7 @@ export function mountCatalog(root, api) {
       for (const input of Object.values(inputs)) {
         input.setCustomValidity(input.required && !input.value.trim() ? 'Заполните поле.' : '');
       }
-      const url = inputs.prototype_url.value.trim();
-      if (url && !safeLink(url)) inputs.prototype_url.setCustomValidity('Укажите ссылку с протоколом https:// или http://.');
+      validatePrototype();
       if (!form.reportValidity()) return;
       const selected = teams.find(item => String(item.id) === team.value);
       if (!selected) return;
@@ -277,8 +312,10 @@ export function mountCatalog(root, api) {
 
   function refresh() {
     return run('Загружаем каталог…', async () => {
-      const requested = { industry: industry.value.trim(), level: level.value };
-      const [loadedCards, loadedTeams] = await Promise.all([api.listCards(requested), api.listTeams()]);
+      const [allCards, loadedTeams] = await Promise.all([api.listCards({}), api.listTeams()]);
+      const industries = [...new Set(allCards.map(card => card.industry).filter(value => typeof value === 'string' && value !== ''))];
+      const requested = { industry: industries.includes(industry.value) ? industry.value : '', level: level.value };
+      const loadedCards = requested.industry || requested.level ? await api.listCards(requested) : allCards;
       const published = loadedCards.filter(card => card.published);
       const nextId = published.some(card => card.id === selectedId) ? selectedId : null;
       const loadedProposals = nextId !== null ? await api.listProposals(nextId) : [];
@@ -286,6 +323,7 @@ export function mountCatalog(root, api) {
       teams = loadedTeams;
       selectedId = nextId;
       proposals = loadedProposals;
+      setIndustries(industries, requested.industry);
       renderList();
       renderDetail();
       say(`Каталог обновлён. Опубликованных задач: ${cards.length}.`);

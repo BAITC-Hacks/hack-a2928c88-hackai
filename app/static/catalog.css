@@ -23,6 +23,9 @@
   background: #fff; color: var(--catalog-ink); padding: 10px 12px; font: inherit;
 }
 .catalog-panel textarea { resize: vertical; }
+.catalog-panel .catalog-field-error { color: #a12323; font-size: 14px; font-weight: 400; }
+.catalog-panel .catalog-field-error:empty { display: none; }
+.catalog-panel [aria-invalid="true"] { border-color: #a12323; }
 .catalog-panel button {
   min-height: 44px; padding: 10px 16px; border: 1px solid #17624b; border-radius: 9px;
   background: #17624b; color: #fff; font: inherit; font-weight: 650; cursor: pointer;
