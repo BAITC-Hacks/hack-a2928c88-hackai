@@ -10,7 +10,10 @@ async function request(path, {method = 'GET', body, role, cardId} = {}) {
   const response = await fetch('/api' + path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
   const data = await response.json();
   if (!response.ok) {
-    const message = typeof data.detail === 'string' ? data.detail : 'Проверьте заполнение обязательных полей';
+    const invalidUrl = Array.isArray(data.detail) && data.detail.some(item => item.loc?.includes('prototype_url'));
+    const message = typeof data.detail === 'string' ? data.detail : invalidUrl
+      ? 'Укажите корректную ссылку на прототип (http:// или https://).'
+      : 'Проверьте заполнение обязательных полей';
     throw new Error(message);
   }
   if (data.id && data.revision) revisions.set(data.id, data.revision);
