@@ -1,3 +1,4 @@
+import {mountStages} from './stages.js';
 // T-001: экран бизнеса. Баллы не считаем — только показываем rating из API.
 import {mountSpecification} from './specification.js';
 const FIELDS = [
@@ -81,6 +82,18 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   const state = {draftId: null, questions: [], questionCount: 0, questionsReady: false, card: null,
     dirty: new Set(), checked: new Set(), busy: false, conflict: false};
   const locked = new Map();
+  let stageScreen = null, stageCardId = null;
+  const stageRoot = el('section', {hidden: true});
+  const resumeKey = 'sana:last-business-card';
+  const remember = id => { try { id ? localStorage.setItem(resumeKey, id) : localStorage.removeItem(resumeKey); } catch {} };
+  let remembered = null;
+  try { remembered = localStorage.getItem(resumeKey); } catch {}
+  const hasUnsaved = () => state.dirty.size > 0 || specPanel.hasUnsaved() || stageScreen?.hasUnsaved() || (!state.card && (text.value.trim() || industry.value.trim()));
+  window.onbeforeunload = event => {
+    if (!hasUnsaved()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  };
 
   const steps = el('ol', {class: 'bp-steps', 'aria-label': 'Шаги сценария'});
   const status = el('p', {class: 'bp-status', role: 'status', 'aria-live': 'polite'});
@@ -98,11 +111,42 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     showCard(card, null);
   }));
   const resetBtn = el('button', {type: 'button', class: 'bp-link', text: 'Новая задача'});
-  resetBtn.addEventListener('click', () => { if (!state.busy) mountBusiness(root, api, onPublished); });
+  resetBtn.addEventListener('click', () => {
+    if (state.busy || (hasUnsaved() && !window.confirm('Несохранённый текст будет потерян. Создать новую задачу?'))) return;
+    remember(null);
+    mountBusiness(root, api, onPublished);
+  });
   const head = el('div', {class: 'bp-head'},
     el('div', {}, el('p', {class: 'eyebrow', text: 'Бизнесу'}), el('h2', {text: 'Паспорт готовности задачи'})),
     resetBtn);
-  root.append(head, steps, status, error, reloadWarning, reloadBtn, inputStep, questionStep, cardStep);
+  root.append(head, steps, status, error, reloadWarning, reloadBtn, inputStep, questionStep, cardStep, stageRoot);
+  const resume = el('div', {class: 'bp-resume msg', hidden: !remembered});
+  const resumeBtn = el('button', {type: 'button', text: 'Продолжить сохранённую карточку'});
+  const forgetBtn = el('button', {type: 'button', class: 'bp-link', text: 'Убрать напоминание'});
+  resume.append(el('p', {text: 'В этом браузере сохранена ссылка на последнюю карточку. Загрузим её актуальную версию с сервера.'}), resumeBtn, forgetBtn);
+  head.after(resume);
+  forgetBtn.addEventListener('click', () => { remember(null); remembered = null; resume.hidden = true; });
+  resumeBtn.addEventListener('click', () => {
+    if (hasUnsaved() && !window.confirm('Загрузить сохранённую карточку вместо несохранённого текста?')) return;
+    run(resumeBtn, 'Восстанавливаем…', async () => {
+      try {
+        const card = await api.getCard(remembered);
+        state.draftId = card.draft_id;
+        state.questionsReady = true;
+        industry.value = card.industry;
+        showCard(card, null);
+        resume.hidden = true;
+      } catch (error) {
+        if (error?.status === 404) {
+          remember(null);
+          remembered = null;
+          resume.hidden = true;
+          throw new Error('Сохранённая карточка больше недоступна. Можно создать новую задачу.');
+        }
+        throw error;
+      }
+    });
+  });
   const specRoot = el('section', {hidden:true});
   root.append(specRoot);
   const specPanel = mountSpecification(specRoot, api, {
@@ -270,10 +314,17 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   // Шаг 3 — карточка, подтверждение, рейтинг, публикация.
   function showCard(card, previousTotal) {
     state.card = card;
+    remember(card.id);
+    resume.hidden = true;
     state.dirty.clear();
     state.checked.clear();
     renderCard(previousTotal);
     specPanel.setCard(card);
+    if (card.published && stageCardId !== card.id) {
+      stageRoot.hidden = false;
+      stageCardId = card.id;
+      stageScreen = mountStages(stageRoot, api, card.id);
+    }
     syncSteps();
   }
 

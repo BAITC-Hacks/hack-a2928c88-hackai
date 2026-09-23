@@ -142,3 +142,15 @@
 .catalog-panel.catalog-screen .catalog-scenarios p, .catalog-panel.catalog-screen .catalog-review-issue p { font-size: 13px; margin-top: 6px; }
 .catalog-panel.catalog-screen .catalog-review-issue { padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--sunk); }
 .catalog-panel.catalog-screen .catalog-review-issue blockquote { margin: 8px 0; padding-left: 10px; border-left: 2px solid var(--line-strong); overflow-wrap: anywhere; }
+.catalog-panel.catalog-screen .catalog-conditions { grid-column: 1 / -1; min-width: 0; border-top: 1px solid var(--line); padding-top: 10px; }
+.catalog-panel.catalog-screen .catalog-conditions > summary { cursor: pointer; font-weight: 600; }
+.catalog-panel.catalog-screen .catalog-conditions > summary .tag { margin: 4px 0 4px 8px; white-space: normal; }
+.catalog-panel.catalog-screen .catalog-conditions > p, .catalog-panel.catalog-screen .catalog-conditions-result > p { margin: 10px 0; }
+.catalog-panel.catalog-screen .catalog-conditions-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.catalog-panel.catalog-screen .catalog-conditions-table caption { text-align: left; font-weight: 600; padding-bottom: 8px; }
+.catalog-panel.catalog-screen .catalog-conditions-table th, .catalog-panel.catalog-screen .catalog-conditions-table td { padding: 8px; border: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; white-space: pre-wrap; }
+.catalog-panel.catalog-screen .catalog-conditions-table th { background: var(--sunk); }
+.catalog-panel.catalog-screen .catalog-conditions-table th:first-child { width: 25%; }
+.catalog-panel.catalog-screen .catalog-snapshot { margin-top: 12px; }
+.catalog-panel.catalog-screen .catalog-snapshot summary { cursor: pointer; }
+.catalog-panel.catalog-screen .catalog-snapshot dd { white-space: pre-wrap; overflow-wrap: anywhere; }

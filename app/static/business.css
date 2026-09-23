@@ -122,3 +122,7 @@
 .business-panel .bp-review-issue h5 { margin: 0 0 8px; font-size: 1rem; }
 .business-panel .bp-review-issue blockquote { margin: 10px 0; padding-left: 12px; border-left: 3px solid #9a8459; white-space: pre-wrap; overflow-wrap: anywhere; }
 .business-panel .bp-review-status { margin: 12px 0; }
+.business-panel .bp-stage-form { display: grid; gap: 12px; margin-top: 16px; }
+.business-panel .bp-stage-form label { display: grid; gap: 6px; }
+.business-panel .bp-stage-form textarea, .business-panel .bp-stage-form input { width: 100%; padding: 10px; }
+.business-panel .bp-stages p { white-space: pre-wrap; overflow-wrap: anywhere; }

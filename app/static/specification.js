@@ -100,7 +100,12 @@ export function mountSpecification(root, api, hooks) {
       if(dirty) throw new Error('Сохраните правки ТЗ перед повторной генерацией');
       accept(await api.generateSpecification(card.id));
     });
-    actions.append(generate); root.append(actions);
+    actions.append(generate);
+    if (dirty && meta.stale) actions.append(action('Отменить несохранённые правки ТЗ', async()=>{
+      if (!window.confirm('Локальные правки ТЗ будут потеряны. Загрузить сохранённый черновик?')) return;
+      accept(await api.getSpecificationDraft(card.id));
+    }));
+    root.append(actions);
     if (draft?.content || meta.status!=='empty') root.append(node('p','Повторная генерация заменит черновик, правки и выбранные идеи. Потребуется новое утверждение.', 'muted'));
     if(!draft?.content) {hooks.lock(); return;}
     root.append(node('p',modeText(draft),draft.mode==='mock'?'tag tag-mock':'tag'));

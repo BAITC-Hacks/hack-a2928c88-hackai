@@ -15,6 +15,7 @@ from app.rating import calculate_rating, confirm_fields, edit_card, is_confirmed
 from app.recommend import recommend
 from app.review import CardReviewer, review_view, carry_review
 from app.insights import catalog_insights
+from app.stages import register_stages
 from app.schemas import Model, Draft, TaskCard, CardContent, CardField, Proposal, TeamProfile, NonEmpty
 from app.store import Store
 from app.specification import SpecGenerator, spec_state, reviewed_document
@@ -382,6 +383,11 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
             if item["status"] != "selected":
                 raise HTTPException(409, "Сначала бизнес должен выбрать команду")
             key = json.dumps([item["task_id"], item["team_id"], "prototype"])
+            stage = Store.get(db, 'stage', key)
+            if stage:
+                if stage['status'] != 'accepted':
+                    raise HTTPException(409, 'Для этого этапа нужна приёмка результата на экране бизнеса')
+                return {'points': 10, 'already_awarded': True}
             awarded = bool(Store.get(db, "milestone", key))
             Store.put(db, "milestone", key, {"points": 10, "confirmed_by": "demo-business"})
             for p in Store.all(db, "proposal"):
@@ -389,6 +395,8 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
                     p["progress_points"] = 10
                     Store.put(db, "proposal", p["id"], p)
             return {"points": 10, "already_awarded": awarded}
+
+    register_stages(app, store, require, business, student)
 
     static = ROOT / "app/static"
     static.mkdir(exist_ok=True)
