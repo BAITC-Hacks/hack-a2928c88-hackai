@@ -79,3 +79,9 @@ Digest: `sha256:4ba880a03fa16c5116324fd80238a7be54e30f2a8f9ac5f7b933e933e58bd348
 После получения NVIDIA_API_KEY добавить его на сервер и перезапустить/deploy. Код менять не нужно. До получения ключа функция второго мнения показывает недоступность в live; основной OpenAI продолжает работать. При MOCK=1 показываются локальные правила, а не реальный NVIDIA. Проверка конфигурации /health не доказывает успешный вызов. Для проверки после ключа: python scripts/check_ai.py --provider nvidia --workflow review; тесты extract и specification доступны тем же скриптом.
 
 Образ с GPT-5.5/NVIDIA загружен: docker.io/denryyyyyyy/sana-hub:3e53a8d6521d. Digest sha256:33a846da0b96a0b14683d6f8a3ea9ffdd643320db5570b358b632e3bb15a94fe. Проверены конфигурация GPT-5.5 в Linux, API smoke, отсутствие .env и HTTP503 без изменения карточки при отсутствующем NVIDIA-ключе в live. Render этим действием не обновлялся.
+
+## После PR #6 — вопросы и рекомендательные письма
+
+Образ: docker.io/denryyyyyyy/sana-hub:930961031024. Digest sha256:b6f7e220819cdf455c4d5d4aa21befde380240378d1a4b745524b2749b93c401. Перед выдачей PDF в Render Environment задать APP_PUBLIC_URL=https://sana-hub-0ca1dc1.onrender.com — это адрес для QR, который фиксируется в выданном документе. COMMUNITY_DEMO=1 оставляет открытые учебные аккаунты. Существующие GPT-5.5 настройки сохранить.
+
+156 pytest, браузерные smoke_questions, smoke_project_letters, smoke_e2e и API smoke итогового Docker-контейнера пройдены. .env отсутствует в образе. Деплой этой версии на Render ещё не подтверждён.
