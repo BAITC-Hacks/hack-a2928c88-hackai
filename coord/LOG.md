@@ -41,3 +41,6 @@
 
 - 23.09 15:08: Render live E2E passed, OpenAI на уточнениях и карточке. Synthetic=true тестовая запись оставлена в каталоге; рейтинг, публикация, отклик, ручное решение и однократный этап проверены.
 - 15:22 фон: ask --agent claude Read-only review: app/main.py additive seed change and script (pid 45464) → coord/notes/bg-152211707824-ask.log
+- 15:25 вопрос claude: Read-only review: app/main.py additive seed change and scripts/generate_syntheti → coord/notes/Q-152211-claude.md
+- 15:25 фон: ask --agent claude Read-only review app/main.py seed(): additive import missing  (pid 57180) → coord/notes/bg-152536460047-ask.log
+- 15:28 вопрос claude: Read-only review app/main.py seed(): additive import missing fixture IDs without → coord/notes/Q-152536-claude.md
