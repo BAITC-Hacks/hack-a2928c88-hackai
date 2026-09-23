@@ -1,3 +1,4 @@
+// T-002: каталог для команд и решения бизнеса. Порядок и баллы приходят из API.
 const LEVELS = { draft: 'Черновик', working: 'Рабочая', ready: 'Готовая', priority: 'Приоритетная' };
 const FIELDS = {
   context: 'Контекст', need: 'Задача', users: 'Пользователи', data: 'Данные',
@@ -5,33 +6,42 @@ const FIELDS = {
   success_criteria: 'Критерии успеха', contact: 'Контакт',
   interaction_format: 'Формат взаимодействия', feedback_process: 'Обратная связь',
 };
-const STATUSES = { pending: 'На рассмотрении', selected: 'Команда выбрана', rejected: 'Отклонён' };
+const STATUSES = { pending: 'Ждёт решения', selected: 'Команда выбрана', rejected: 'Отклонён' };
+const PAGE_SIZE = 20;
+const INDUSTRY_CHIPS = 8;
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = String(text);
+  if (text !== undefined && text !== null) node.textContent = String(text);
   if (className) node.className = className;
   return node;
 }
 
-function button(text, action) {
-  const node = element('button', text);
+function button(text, action, className) {
+  const node = element('button', text, className);
   node.type = 'button';
   node.addEventListener('click', action);
   return node;
 }
 
-function labeled(text, input) {
-  const label = element('label', undefined, 'catalog-field');
+function labeled(text, input, className = 'catalog-field') {
+  const label = element('label', undefined, className);
   label.append(element('span', text), input);
   return label;
+}
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
 }
 
 function safeLink(value) {
   try {
     const url = new URL(value);
     if (!['http:', 'https:'].includes(url.protocol)) return null;
-    const link = element('a', 'Открыть прототип');
+    const link = element('a', 'Открыть прототип ↗');
     link.href = url.href;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
@@ -39,42 +49,102 @@ function safeLink(value) {
   } catch { return null; }
 }
 
-/** Mount with the Promise-based adapter from TEAM.md. refresh() reloads the active filters. */
+function sourceLabel(sourceId) {
+  const id = String(sourceId || '');
+  if (id.startsWith('manual:')) return 'введено бизнесом вручную';
+  if (id === 'draft') return 'из описания задачи';
+  const answer = /^q-(\d+)$/.exec(id);
+  return answer ? `из ответа на вопрос ${Number(answer[1]) + 1}` : `источник: ${id}`;
+}
+
+function ruler(card, small = true) {
+  const total = card.rating?.total ?? 0, level = card.rating?.level || 'draft';
+  const bar = element('div', undefined, 'ruler' + (small ? ' sm' : ''));
+  bar.dataset.level = level;
+  bar.style.setProperty('--v', String(total));
+  bar.setAttribute('role', 'img');
+  bar.setAttribute('aria-label', `Готовность ${total} из 100`);
+  return bar;
+}
+
+function stamp(level) {
+  return element('span', LEVELS[level] || 'Уровень не указан', `stamp stamp-${level}`);
+}
+
+function chip(name, value, text, count, checked) {
+  const label = element('label', undefined, 'chip');
+  const input = element('input');
+  input.type = 'radio';
+  input.name = name;
+  input.value = value;
+  input.checked = checked;
+  const face = element('span', text);
+  if (count !== undefined) face.append(element('em', count));
+  label.append(input, face);
+  return label;
+}
+
+/** Mount with the Promise-based adapter from TEAM.md. Returns refresh() and focusCard(card). */
 export function mountCatalog(root, api) {
-  const panel = element('section', undefined, 'catalog-panel');
+  const panel = element('div', undefined, 'catalog-panel catalog-screen');
   root.replaceChildren(panel);
-  const heading = element('header');
-  heading.append(element('p', 'AI SANA / КОМАНДАМ', 'catalog-eyebrow'), element('h2', 'Задачи бизнеса'),
-    element('p', 'Найдите задачу, предложите решение и пройдите этапы вместе с бизнесом.'));
+
+  const state = {
+    q: '', industry: '', level: '', page: 0, total: 0, cards: [], facets: null,
+    teams: [], teamId: '', recs: [], selected: null, proposals: [], tab: 'task',
+    pinned: null, showAllIndustries: false,
+  };
+  let busy = false;
+
+  // Header with team persona
+  const persona = element('select');
+  persona.id = 'catalog-persona';
+  persona.addEventListener('change', () => { state.teamId = persona.value; void loadRecs(); });
+  const head = element('header', undefined, 'catalog-head');
+  const headCopy = element('div');
+  headCopy.append(element('p', 'Командам', 'eyebrow'), element('h2', 'Задачи бизнеса'),
+    element('p', 'Все опубликованные задачи доступны любой команде. Выше — те, что готовы к работе. Низкий рейтинг не запрещает отклик.', 'muted catalog-lede'));
+  head.append(headCopy, labeled('Вы — команда', persona, 'catalog-field catalog-persona'));
+
+  // Filters
   const filters = element('form', undefined, 'catalog-filters');
-  const industry = element('input');
-  industry.type = 'search';
-  industry.placeholder = 'Например, образование';
-  const level = element('select');
-  for (const [value, text] of [['', 'Все уровни'], ...Object.entries(LEVELS)]) {
-    const option = element('option', text);
-    option.value = value;
-    level.append(option);
-  }
-  const apply = element('button', 'Показать задачи');
-  apply.type = 'submit';
-  filters.append(labeled('Отрасль', industry), labeled('Готовность задачи', level), apply);
+  filters.setAttribute('role', 'search');
+  const search = element('input');
+  search.type = 'search';
+  search.id = 'catalog-q';
+  search.placeholder = 'чат-бот, CSV, расписание, конвейер…';
+  search.maxLength = 200;
+  const find = element('button', 'Найти', 'btn-primary');
+  find.type = 'submit';
+  const searchRow = element('div', undefined, 'catalog-search');
+  searchRow.append(labeled('Поиск по задачам', search), find);
+  const levelChips = element('fieldset', undefined, 'chips catalog-levels');
+  const industryChips = element('fieldset', undefined, 'chips catalog-industries');
+  filters.append(searchRow, levelChips, industryChips);
+
   const notice = element('p', '', 'catalog-notice');
   notice.setAttribute('role', 'status');
   notice.setAttribute('aria-live', 'polite');
+
+  const recsBox = element('section', undefined, 'catalog-recs');
+  recsBox.setAttribute('aria-label', 'Рекомендации для команды');
+  recsBox.hidden = true;
+
   const layout = element('div', undefined, 'catalog-layout');
-  const list = element('div', undefined, 'catalog-list');
-  list.setAttribute('aria-label', 'Опубликованные задачи');
+  const listCol = element('div', undefined, 'catalog-list');
+  listCol.setAttribute('aria-label', 'Опубликованные задачи');
   const detail = element('section', undefined, 'catalog-detail');
   detail.setAttribute('aria-label', 'Карточка задачи');
-  layout.append(list, detail);
-  panel.append(heading, filters, notice, layout);
-  let cards = [], teams = [], selectedId = null, proposals = [];
-  let busy = false;
+  const backdrop = element('div', undefined, 'catalog-backdrop');
+  backdrop.addEventListener('click', closeSheet);
+  layout.append(listCol, detail, backdrop);
+  panel.append(head, filters, notice, recsBox, layout);
 
   function say(text, error = false) {
     notice.textContent = text;
     notice.classList.toggle('catalog-error', error);
+    notice.classList.toggle('msg', error);
+    notice.classList.toggle('msg-error', error);
     notice.setAttribute('role', error ? 'alert' : 'status');
   }
 
@@ -90,122 +160,322 @@ export function mountCatalog(root, api) {
     try { await work(); }
     catch (error) { say(`Не удалось выполнить действие. ${error?.message || 'Попробуйте ещё раз.'}`, true); }
     finally {
-      controls.forEach((node, index) => { node.disabled = disabled[index]; });
+      controls.forEach((node, index) => { if (node.isConnected) node.disabled = disabled[index]; });
       busy = false;
       panel.setAttribute('aria-busy', 'false');
     }
   }
 
-  function badges(card) {
-    const row = element('div', undefined, 'catalog-badges');
-    row.append(element('span', `${card.rating?.total ?? '—'} / 100`, 'catalog-score'),
-      element('span', LEVELS[card.rating?.level] || 'Уровень не указан', 'catalog-badge'));
-    if (card.rating?.total < 40) row.append(element('span', 'Нужны уточнения', 'catalog-warning'));
-    if (card.synthetic) row.append(element('span', 'Синтетический пример', 'catalog-badge'));
-    if (card.mode === 'mock') row.append(element('span', 'Демо · mock', 'catalog-badge'));
-    return row;
-  }
-
-  function renderList() {
-    list.replaceChildren(element('p', `Найдено задач: ${cards.length}`, 'catalog-muted'));
-    if (!cards.length) list.append(element('p', 'Задач пока нет. Попробуйте изменить фильтры.'));
-    // The adapter owns ranking. Preserve its order exactly.
-    for (const card of cards) {
-      const item = element('article', undefined, 'catalog-card');
-      item.classList.toggle('catalog-active', card.id === selectedId);
-      const open = button(card.id === selectedId ? 'Карточка открыта' : 'Посмотреть задачу', () => openCard(card.id));
-      open.setAttribute('aria-pressed', String(card.id === selectedId));
-      item.append(element('p', card.industry || 'Отрасль не указана', 'catalog-eyebrow'),
-        element('h3', card.title || 'Задача без названия'), badges(card),
-        element('p', card.need || card.context || 'Описание пока не заполнено.'), open);
-      list.append(item);
+  function renderFilters() {
+    const levels = state.facets?.levels || {};
+    levelChips.replaceChildren(element('legend', 'Готовность', 'visually-hidden'),
+      chip('catalog-level', '', 'Все уровни', state.facets?.total, state.level === ''),
+      ...Object.entries(LEVELS).map(([value, text]) => chip('catalog-level', value, text, levels[value] ?? 0, state.level === value)));
+    const industries = state.facets?.industries || [];
+    const shown = state.showAllIndustries ? industries : industries.slice(0, INDUSTRY_CHIPS);
+    if (state.industry && !shown.some(i => i.name === state.industry)) {
+      const current = industries.find(i => i.name === state.industry);
+      if (current) shown.push(current);
+    }
+    industryChips.replaceChildren(element('legend', 'Отрасль', 'visually-hidden'),
+      chip('catalog-industry', '', 'Все отрасли', undefined, state.industry === ''),
+      ...shown.map(i => chip('catalog-industry', i.name, i.name, i.count, state.industry === i.name)));
+    if (industries.length > INDUSTRY_CHIPS) {
+      const more = button(state.showAllIndustries ? 'Свернуть' : `Ещё ${industries.length - INDUSTRY_CHIPS}`, () => {
+        state.showAllIndustries = !state.showAllIndustries;
+        renderFilters();
+      }, 'btn-quiet catalog-more');
+      industryChips.append(more);
     }
   }
 
-  function openCard(id) {
-    return run('Загружаем отклики…', async () => {
-      const loaded = await api.listProposals(id);
-      selectedId = id;
-      proposals = loaded;
-      renderList();
+  filters.addEventListener('change', event => {
+    if (event.target.name === 'catalog-level') state.level = event.target.value;
+    else if (event.target.name === 'catalog-industry') state.industry = event.target.value;
+    else return;
+    state.page = 0;
+    void loadPage('Фильтруем…');
+  });
+  filters.addEventListener('submit', event => {
+    event.preventDefault();
+    state.q = search.value.trim();
+    state.page = 0;
+    void loadPage('Ищем…');
+  });
+
+  function renderPersona() {
+    persona.replaceChildren(element('option', 'Не выбрана'));
+    persona.firstChild.value = '';
+    for (const team of state.teams) {
+      const option = element('option', team.name);
+      option.value = String(team.id);
+      option.selected = String(team.id) === state.teamId;
+      persona.append(option);
+    }
+  }
+
+  async function loadRecs() {
+    if (!state.teamId) { state.recs = []; renderRecs(); renderDetail(); return; }
+    await run('Подбираем задачи для команды…', async () => {
+      state.recs = await api.teamRecommendations(state.teamId, 5);
+      renderRecs();
       renderDetail();
-      say('Карточка загружена.');
-      detail.querySelector('h3')?.focus();
+      say(state.recs.length ? `Рекомендации обновлены: ${state.recs.length}.` : 'Для этой команды совпадений по профилю нет. Каталог доступен целиком.');
     });
   }
 
-  function renderDetail() {
-    detail.replaceChildren();
-    const card = cards.find(item => item.id === selectedId);
-    if (!card) {
-      detail.append(element('p', 'Выберите задачу, чтобы посмотреть подробности и отправить отклик.', 'catalog-empty'));
-      return;
+  function renderRecs() {
+    const team = state.teams.find(t => String(t.id) === state.teamId);
+    recsBox.hidden = !team || !state.recs.length;
+    if (recsBox.hidden) { recsBox.replaceChildren(); return; }
+    const list = element('ol', undefined, 'catalog-recs-list');
+    for (const card of state.recs) {
+      const item = element('li');
+      const open = button('', () => openCard(card), 'catalog-rec');
+      open.append(element('span', card.industry, 'eyebrow'), element('span', card.title, 'catalog-rec-title'),
+        ruler(card), element('span', `${card.rating.total} · ${card.matched.slice(0, 2).join(', ')}`, 'catalog-rec-why num'));
+      item.append(open);
+      list.append(item);
     }
+    const title = element('div', undefined, 'catalog-recs-head');
+    title.append(element('h3', `Подходят команде ${team.name}`),
+      element('p', 'По совпадению слов профиля команды с текстом задачи. Только задачи от 40 баллов. Остальной каталог не скрыт.', 'muted'));
+    recsBox.replaceChildren(title, list);
+  }
+
+  function cardRow(card, {pinned = false} = {}) {
+    const level = card.rating?.level || 'draft';
+    const item = element('article', undefined, `catalog-card level-${level}`);
+    item.classList.toggle('catalog-active', card.id === state.selected?.id);
+    item.classList.toggle('is-pinned', pinned);
+    if (pinned) item.append(element('p', 'Только что опубликовано', 'catalog-pin'));
+    const title = element('h3');
+    const open = button(card.title || 'Задача без названия', () => openCard(card), 'catalog-open');
+    open.setAttribute('aria-pressed', String(card.id === state.selected?.id));
+    title.append(open);
+    const score = element('div', undefined, 'catalog-score');
+    score.append(element('b', card.rating?.total ?? '—', 'num'), stamp(level));
+    const foot = element('p', undefined, 'catalog-foot');
+    const count = card.proposals_count ?? 0;
+    foot.append(element('span', `${count} ${plural(count, 'отклик', 'отклика', 'откликов')}`));
+    if ((card.rating?.total ?? 0) < 40) foot.append(element('span', 'Нужны уточнения', 'tag tag-warn'));
+    if (card.mode === 'live') foot.append(element('span', 'AI live', 'tag tag-live'));
+    item.append(element('p', card.industry || 'Отрасль не указана', 'eyebrow'), title, score, ruler(card), foot);
+    return item;
+  }
+
+  function renderList() {
+    const pages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+    const from = state.total ? state.page * PAGE_SIZE + 1 : 0;
+    const to = Math.min(state.total, (state.page + 1) * PAGE_SIZE);
+    const header = element('header', undefined, 'catalog-list-head');
+    header.append(element('span', `Найдено задач: ${state.total}`), element('span', 'по готовности ↓', 'muted'));
+    const nodes = [header];
+    if (state.pinned && !state.cards.some(c => c.id === state.pinned.id)) nodes.push(cardRow(state.pinned, {pinned: true}));
+    if (!state.cards.length) {
+      const empty = element('div', undefined, 'catalog-empty');
+      empty.append(element('p', 'Под эти фильтры задач нет.'),
+        button('Сбросить фильтры', () => { resetFilters(); void loadPage('Сбрасываем фильтры…'); }, 'btn-quiet'));
+      nodes.push(empty);
+    }
+    for (const card of state.cards) nodes.push(cardRow(card, {pinned: card.id === state.pinned?.id}));
+    if (pages > 1) {
+      const nav = element('nav', undefined, 'catalog-pager');
+      nav.setAttribute('aria-label', 'Страницы каталога');
+      nav.append(element('span', `${from}–${to} из ${state.total}`, 'muted num'));
+      const go = page => () => { state.page = page; void loadPage('Загружаем страницу…', {scroll: true}); };
+      const numbers = element('div', undefined, 'catalog-pages');
+      const prev = button('←', go(state.page - 1));
+      prev.disabled = state.page === 0;
+      prev.setAttribute('aria-label', 'Предыдущая страница');
+      numbers.append(prev);
+      const wanted = [...new Set([0, state.page - 1, state.page, state.page + 1, pages - 1])].filter(p => p >= 0 && p < pages).sort((a, b) => a - b);
+      wanted.forEach((p, i) => {
+        if (i && p - wanted[i - 1] > 1) numbers.append(element('span', '…', 'muted'));
+        const b = button(String(p + 1), go(p), 'num');
+        if (p === state.page) b.setAttribute('aria-current', 'page');
+        numbers.append(b);
+      });
+      const next = button('→', go(state.page + 1));
+      next.disabled = state.page >= pages - 1;
+      next.setAttribute('aria-label', 'Следующая страница');
+      numbers.append(next);
+      nav.append(numbers);
+      nodes.push(nav);
+    }
+    listCol.replaceChildren(...nodes);
+  }
+
+  function resetFilters() {
+    state.q = state.industry = state.level = '';
+    search.value = '';
+    state.page = 0;
+  }
+
+  function openCard(card) {
+    return run('Загружаем отклики…', async () => {
+      const loaded = await api.listProposals(card.id);
+      state.selected = card;
+      state.proposals = loaded;
+      state.tab = 'task';
+      renderList();
+      renderDetail();
+      openSheet();
+      say(`Открыта задача «${card.title || 'без названия'}».`);
+      detail.querySelector('h3')?.focus({preventScroll: true});
+    });
+  }
+
+  function isSheet() { return matchMedia('(max-width: 760px)').matches; }
+  function openSheet() {
+    if (!isSheet()) return;
+    detail.classList.add('is-open');
+    backdrop.classList.add('is-open');
+    document.body.classList.add('catalog-lock');
+  }
+  function closeSheet() {
+    detail.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+    document.body.classList.remove('catalog-lock');
+    listCol.querySelector('.catalog-active .catalog-open')?.focus({preventScroll: true});
+  }
+  detail.addEventListener('keydown', event => { if (event.key === 'Escape') closeSheet(); });
+
+  function renderEmptyDetail() {
+    const box = element('div', undefined, 'catalog-empty-detail');
+    box.append(element('h3', 'Выберите задачу'),
+      element('p', 'Откройте карточку слева, чтобы прочитать условия, отправить отклик от команды или, от лица бизнеса, выбрать команду.', 'muted'));
+    const legend = element('ul', undefined, 'catalog-legend');
+    for (const [level, range, note] of [['priority', '90–100', 'полностью готова, выделена'], ['ready', '70–89', 'выше в каталоге'],
+      ['working', '40–69', 'можно рекомендовать'], ['draft', '0–39', 'видна, нужны уточнения']]) {
+      const li = element('li');
+      li.append(stamp(level), element('span', range, 'num'), element('span', note, 'muted'));
+      legend.append(li);
+    }
+    box.append(legend);
+    return box;
+  }
+
+  function renderDetail() {
+    const card = state.selected;
+    if (!card) { detail.replaceChildren(renderEmptyDetail()); return; }
+    const top = element('div', undefined, 'catalog-detail-head');
+    const close = button('Закрыть', closeSheet, 'btn-quiet catalog-close');
+    const meta = element('p', undefined, 'eyebrow');
+    meta.textContent = [card.industry, card.first_published_at ? 'опубликовано ' + new Date(card.first_published_at).toLocaleDateString('ru-RU') : ''].filter(Boolean).join(' · ');
     const title = element('h3', card.title || 'Задача без названия');
     title.tabIndex = -1;
-    detail.append(title, badges(card));
-    const fields = element('dl', undefined, 'catalog-facts');
+    const scoreLine = element('div', undefined, 'catalog-detail-score');
+    scoreLine.append(element('b', card.rating?.total ?? '—', 'num'), ruler(card, false), stamp(card.rating?.level || 'draft'));
+    const badges = element('div', undefined, 'catalog-badges');
+    if (card.synthetic) badges.append(element('span', 'Синтетический пример', 'tag'));
+    if (card.mode === 'mock') badges.append(element('span', 'Карточка собрана без реального AI', 'tag tag-mock'));
+    if ((card.rating?.total ?? 0) < 40) badges.append(element('span', 'Нужны уточнения — откликаться можно', 'tag tag-warn'));
+    top.append(close, meta, title, scoreLine, badges);
+
+    const tabs = element('div', undefined, 'tabs catalog-tabs');
+    tabs.setAttribute('role', 'tablist');
+    const tabDefs = [['task', 'Задача'], ['apply', 'Откликнуться'], ['proposals', 'Отклики']];
+    for (const [key, text] of tabDefs) {
+      const tab = button(text, () => { state.tab = key; renderDetail(); detail.querySelector(`[data-tab="${key}"]`)?.focus(); });
+      tab.dataset.tab = key;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(state.tab === key));
+      if (key === 'proposals') tab.append(element('em', state.proposals.length, 'num'));
+      tabs.append(tab);
+    }
+    const body = element('div', undefined, 'catalog-tabpanel');
+    body.setAttribute('role', 'tabpanel');
+    if (state.tab === 'task') body.append(...taskPanel(card));
+    else if (state.tab === 'apply') body.append(proposalForm(card));
+    else body.append(proposalSection(card));
+    detail.replaceChildren(top, tabs, body);
+  }
+
+  function taskPanel(card) {
+    const nodes = [];
+    const rec = state.recs.find(r => r.id === card.id);
+    const team = state.teams.find(t => String(t.id) === state.teamId);
+    if (rec && team) nodes.push(element('p', `Совпадает с профилем ${team.name}: ${rec.matched.join(', ')}.`, 'catalog-fit'));
+    const facts = element('dl', undefined, 'catalog-facts');
     for (const [key, label] of Object.entries(FIELDS)) {
       const value = element('dd', card[key] || 'Не указано');
-      if (card.confirmed_fields?.includes(key)) value.append(element('small', 'Подтверждено бизнесом', 'catalog-muted'));
+      if (!card[key]) value.classList.add('is-empty');
+      if (card.confirmed_fields?.includes(key)) value.append(element('small', '✓ подтверждено бизнесом', 'catalog-confirmed'));
       const evidence = card.evidence?.[key];
-      if (evidence?.quote) value.append(element('blockquote', evidence.quote));
-      if (evidence?.source_id) value.append(element('small', `Источник: ${evidence.source_id}`, 'catalog-muted'));
-      fields.append(element('dt', label), value);
+      if (evidence?.quote && evidence.quote !== card[key]) value.append(element('blockquote', evidence.quote));
+      if (evidence?.source_id) value.append(element('small', sourceLabel(evidence.source_id), 'muted'));
+      facts.append(element('dt', label), value);
     }
-    detail.append(fields);
-    const rating = element('details');
+    nodes.push(facts);
+    const rating = element('details', undefined, 'catalog-rating');
     rating.append(element('summary', 'Из чего складывается рейтинг'));
+    const items = element('ul', undefined, 'catalog-rating-items');
     for (const item of card.rating?.items || []) {
-      rating.append(element('p', `${item.label}: ${item.earned} / ${item.maximum}. ${item.explanation || ''}`));
+      const li = element('li');
+      li.append(element('span', item.label), element('span', `${item.earned} / ${item.maximum}`, 'num'));
+      items.append(li);
     }
-    if (card.rating?.missing_fields?.length) {
-      rating.append(element('p', `Не хватает: ${card.rating.missing_fields.map(key => FIELDS[key] || key).join(', ')}`));
+    rating.append(items);
+    const gains = card.rating?.gains || [];
+    if (gains.length) {
+      rating.append(element('p', 'Бизнес может поднять рейтинг: ' + gains.map(g => `${FIELDS[g.field] || g.field} +${g.points}`).join(', ') + '.', 'muted'));
     }
-    detail.append(rating, proposalForm(card), proposalSection());
+    nodes.push(rating);
+    const cta = button('Откликнуться на задачу', () => { state.tab = 'apply'; renderDetail(); }, 'btn-primary catalog-cta');
+    nodes.push(cta);
+    return nodes;
+  }
+
+  function teamSummary(team) {
+    if (!team) return '';
+    return ['interests', 'skills', 'technologies'].map((key, i) => {
+      const value = team[key];
+      return `${['Интересы', 'Навыки', 'Технологии'][i]}: ${Array.isArray(value) ? value.join(', ') : value || 'не указаны'}`;
+    }).join(' · ');
   }
 
   function proposalForm(card) {
     const form = element('form', undefined, 'catalog-proposal-form');
-    form.append(element('h4', 'Предложить решение'));
+    form.noValidate = false;
+    form.append(element('h4', 'Предложить решение'),
+      element('p', 'Отклик увидит бизнес. Он сам сравнивает предложения и выбирает команду — система никого не назначает.', 'muted'));
     const team = element('select');
     team.required = true;
-    const placeholder = element('option', teams.length ? 'Выберите учебную команду' : 'Нет доступных команд');
+    team.name = 'team_id';
+    const placeholder = element('option', state.teams.length ? 'Выберите учебную команду' : 'Нет доступных команд');
     placeholder.value = '';
     team.append(placeholder);
-    for (const item of teams) {
+    for (const item of state.teams) {
       const option = element('option', item.name);
       option.value = String(item.id);
+      option.selected = String(item.id) === state.teamId;
       team.append(option);
     }
-    const teamInfo = element('p', '', 'catalog-muted');
-    team.addEventListener('change', () => {
-      const selected = teams.find(item => String(item.id) === team.value);
-      teamInfo.textContent = selected ? ['interests', 'skills', 'technologies'].map((key, i) => {
-        const value = selected[key];
-        return `${['Интересы', 'Навыки', 'Технологии'][i]}: ${Array.isArray(value) ? value.join(', ') : value || 'не указаны'}`;
-      }).join(' · ') : '';
-    });
+    const teamInfo = element('p', teamSummary(state.teams.find(t => String(t.id) === team.value)), 'muted catalog-team-info');
+    team.addEventListener('change', () => { teamInfo.textContent = teamSummary(state.teams.find(t => String(t.id) === team.value)); });
     form.append(labeled('Учебная команда', team), teamInfo);
     const inputs = {};
-    for (const [key, label, tag] of [
-      ['idea', 'Идея решения', 'textarea'], ['plan', 'План работы', 'textarea'],
-      ['timeline', 'Срок', 'input'], ['prototype_url', 'Ссылка на прототип (необязательно)', 'input'],
+    for (const [key, label, tag, hint] of [
+      ['idea', 'Идея решения', 'textarea', 'Что сделаете и почему это решит задачу'],
+      ['plan', 'План работы', 'textarea', '3–5 шагов'],
+      ['timeline', 'Срок', 'input', 'Например: 4 недели'],
+      ['prototype_url', 'Ссылка на прототип или репозиторий', 'input', 'https://'],
     ]) {
       const input = element(tag);
       input.name = key;
-      input.required = key !== 'prototype_url';
+      input.required = true;
+      input.placeholder = hint;
       if (tag === 'textarea') input.rows = 3;
-      if (key === 'prototype_url') { input.type = 'url'; input.placeholder = 'https://'; }
+      if (key === 'prototype_url') input.type = 'url';
       input.addEventListener('input', () => input.setCustomValidity(''));
       inputs[key] = input;
       form.append(labeled(label, input));
     }
-    const submit = element('button', 'Отправить отклик');
+    const submit = element('button', 'Отправить отклик', 'btn-primary');
     submit.type = 'submit';
-    submit.disabled = !teams.length;
+    submit.disabled = !state.teams.length;
     form.append(submit);
-    if (!teams.length) form.append(element('p', 'Добавьте команду и обновите каталог, чтобы отправить отклик.'));
     form.addEventListener('submit', event => {
       event.preventDefault();
       if (busy) return;
@@ -215,43 +485,68 @@ export function mountCatalog(root, api) {
       const url = inputs.prototype_url.value.trim();
       if (url && !safeLink(url)) inputs.prototype_url.setCustomValidity('Укажите ссылку с протоколом https:// или http://.');
       if (!form.reportValidity()) return;
-      const selected = teams.find(item => String(item.id) === team.value);
+      const selected = state.teams.find(item => String(item.id) === team.value);
       if (!selected) return;
       run('Отправляем отклик…', async () => {
         const proposal = await api.createProposal(card.id, {
           team_id: selected.id, ...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])),
         });
-        proposals = [...proposals.filter(item => item.id !== proposal.id), proposal];
+        state.proposals = [...state.proposals.filter(item => item.id !== proposal.id), proposal];
+        bumpCount(card.id, state.proposals.length);
+        state.tab = 'proposals';
+        renderList();
         renderDetail();
-        say('Отклик отправлен и добавлен в список для бизнеса.');
+        say('Отклик отправлен. Он появился во вкладке «Отклики» для бизнеса.');
       });
     });
     return form;
   }
 
-  function proposalSection() {
+  function bumpCount(cardId, count) {
+    const update = c => (c && c.id === cardId ? {...c, proposals_count: count} : c);
+    state.cards = state.cards.map(update);
+    state.pinned = update(state.pinned);
+    state.selected = update(state.selected);
+  }
+
+  function proposalSection(card) {
     const section = element('section', undefined, 'catalog-proposals');
     section.append(element('h4', 'Бизнесу: отклики команд'),
-      element('p', 'Можно выбрать несколько команд. Решение принимает бизнес. Баллы прогресса учитываются отдельно от рейтинга задачи.', 'catalog-muted'));
-    if (!proposals.length) section.append(element('p', 'Откликов пока нет.'));
-    for (const proposal of proposals) {
-      const item = element('article', undefined, 'catalog-proposal');
-      item.append(element('h5', proposal.team_name || `Команда ${proposal.team_id}`),
-        element('span', STATUSES[proposal.status] || proposal.status, 'catalog-badge'));
+      element('p', 'Сравните предложения и решите вручную: можно выбрать несколько команд или ни одной. Баллы прогресса команды считаются отдельно от рейтинга задачи.', 'muted'));
+    if (!state.proposals.length) {
+      section.append(element('p', 'Откликов пока нет. Первая команда может откликнуться во вкладке «Откликнуться».', 'catalog-empty'));
+      return section;
+    }
+    const grid = element('div', undefined, 'catalog-compare');
+    for (const proposal of state.proposals) {
+      const team = state.teams.find(t => t.id === proposal.team_id);
+      const item = element('article', undefined, `catalog-proposal status-${proposal.status}`);
+      const who = element('div', undefined, 'catalog-proposal-who');
+      who.append(element('h5', proposal.team_name || `Команда ${proposal.team_id}`),
+        element('span', STATUSES[proposal.status] || proposal.status, `tag status-tag status-${proposal.status}`));
+      if (team) {
+        const tags = element('div', undefined, 'catalog-skills');
+        for (const skill of [...team.skills, ...team.technologies].slice(0, 5)) tags.append(element('span', skill));
+        who.append(tags);
+      }
+      const what = element('div', undefined, 'catalog-proposal-what');
       for (const [key, label] of [['idea', 'Идея'], ['plan', 'План'], ['timeline', 'Срок']]) {
-        item.append(element('p', `${label}: ${proposal[key] || 'Не указано'}`));
+        const row = element('p');
+        row.append(element('b', label + ': '), document.createTextNode(proposal[key] || 'Не указано'));
+        what.append(row);
       }
       const link = safeLink(proposal.prototype_url);
-      if (link) item.append(link);
-      item.append(element('p', `Баллы прогресса: ${proposal.progress_points ?? 0}`, 'catalog-progress'));
+      if (link) what.append(link);
+      const decide = element('div', undefined, 'catalog-proposal-decide');
+      decide.append(element('p', `Баллы прогресса: ${proposal.progress_points ?? 0}`, 'catalog-progress num'));
       const actions = element('div', undefined, 'catalog-actions');
       for (const [action, label, status] of [['select', 'Выбрать', 'selected'], ['reject', 'Отклонить', 'rejected']]) {
         const control = button(label, () => run('Сохраняем решение…', async () => {
           const updated = await api.decideProposal(proposal.id, { action });
-          proposals = proposals.map(current => current.id === updated.id ? updated : current);
-          section.replaceWith(proposalSection());
+          state.proposals = state.proposals.map(current => current.id === updated.id ? updated : current);
+          renderDetail();
           say('Статус отклика обновлён.');
-        }));
+        }), action === 'select' ? 'btn-primary' : '');
         control.disabled = proposal.status === status;
         actions.append(control);
       }
@@ -260,8 +555,8 @@ export function mountCatalog(root, api) {
           const result = await api.confirmMilestone(proposal.id);
           // Never add points locally: reload the server's authoritative balance.
           try {
-            proposals = await api.listProposals(selectedId);
-            section.replaceWith(proposalSection());
+            state.proposals = await api.listProposals(card.id);
+            renderDetail();
           } catch (error) {
             say(`Этап подтверждён, но баллы не удалось обновить. Обновите каталог. ${error?.message || ''}`, true);
             return;
@@ -269,30 +564,56 @@ export function mountCatalog(root, api) {
           say(result.already_awarded ? 'Этот этап уже подтверждён. Повторного начисления нет.' : `Этап подтверждён. Баллы за этап: ${result.points}.`);
         })));
       }
-      item.append(actions);
-      section.append(item);
+      decide.append(actions);
+      item.append(who, what, decide);
+      grid.append(item);
     }
+    section.append(grid);
     return section;
+  }
+
+  async function fetchPage() {
+    const page = await api.listCardsPage({q: state.q, industry: state.industry, level: state.level,
+      limit: PAGE_SIZE, offset: state.page * PAGE_SIZE});
+    state.cards = page.items.filter(card => card.published !== false);
+    state.total = page.total;
+  }
+
+  function loadPage(message, {scroll = false} = {}) {
+    return run(message, async () => {
+      await fetchPage();
+      renderFilters();
+      renderList();
+      say(`Найдено задач: ${state.total}.`);
+      if (scroll) listCol.scrollIntoView({block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+    });
   }
 
   function refresh() {
     return run('Загружаем каталог…', async () => {
-      const requested = { industry: industry.value.trim(), level: level.value };
-      const [loadedCards, loadedTeams] = await Promise.all([api.listCards(requested), api.listTeams()]);
-      const published = loadedCards.filter(card => card.published);
-      const nextId = published.some(card => card.id === selectedId) ? selectedId : null;
-      const loadedProposals = nextId !== null ? await api.listProposals(nextId) : [];
-      cards = published;
-      teams = loadedTeams;
-      selectedId = nextId;
-      proposals = loadedProposals;
+      const [facets, teams] = await Promise.all([api.catalogFacets(), api.listTeams()]);
+      state.facets = facets;
+      state.teams = teams;
+      await fetchPage();
+      if (state.selected) state.proposals = await api.listProposals(state.selected.id);
+      renderPersona();
+      renderFilters();
       renderList();
       renderDetail();
-      say(`Каталог обновлён. Опубликованных задач: ${cards.length}.`);
+      say(`Каталог обновлён. Опубликованных задач: ${facets.total}.`);
     });
   }
-  filters.addEventListener('submit', event => { event.preventDefault(); void refresh(); });
+
+  /** Show a card that was just published, even if it is not on the current page. */
+  async function focusCard(card) {
+    state.pinned = {...card, proposals_count: card.proposals_count ?? 0};
+    resetFilters();
+    await refresh();
+    await openCard(state.pinned);
+    listCol.querySelector('.is-pinned')?.scrollIntoView({block: 'nearest'});
+  }
+
   renderDetail();
   void refresh();
-  return { refresh };
+  return { refresh, focusCard };
 }
