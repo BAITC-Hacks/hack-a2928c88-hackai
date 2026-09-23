@@ -41,6 +41,95 @@ function safeLink(value) {
   } catch { return null; }
 }
 
+function currentInsights(card) {
+  const insights = card.catalog_insights;
+  return card.revision != null && insights?.revision === card.revision ? insights : null;
+}
+
+function validPosition(rank, total) {
+  return Number.isInteger(rank) && Number.isInteger(total) && rank > 0 && rank <= total;
+}
+
+function positionLabel(card) {
+  const insights = currentInsights(card);
+  if (!insights || !validPosition(insights.rank, insights.total)) return null;
+  return element('p', `Место №${insights.rank} из ${insights.total} в общем каталоге`, 'catalog-rank');
+}
+
+function improvementSection(card) {
+  const section = element('section', undefined, 'catalog-insights');
+  section.append(element('h4', 'Как бизнес может улучшить задачу'));
+  const insights = currentInsights(card);
+  if (card.synthetic) section.append(element('p', 'Общий каталог содержит учебные примеры. Эта карточка синтетическая.', 'catalog-muted'));
+  if (!insights || !Array.isArray(insights.actions)) {
+    section.append(element('p', 'Прогноз улучшений пока недоступен для этой версии карточки.'));
+    return section;
+  }
+  if (!insights.actions.length) {
+    section.append(element('p', 'Все поля рейтинга заполнены и подтверждены'));
+    return section;
+  }
+  const scenarios = element('ol', undefined, 'catalog-scenarios');
+  for (const action of insights.actions.slice(0, 3)) {
+    if (!action || typeof action.label !== 'string' || !Number.isFinite(action.delta)
+      || !Number.isFinite(action.score_after) || !Number.isFinite(card.rating?.total)) continue;
+    const item = element('li');
+    item.append(element('h5', action.label));
+    if (action.instruction) item.append(element('p', action.instruction));
+    item.append(element('p', `Изменение рейтинга: ${action.delta >= 0 ? '+' : ''}${action.delta} баллов.`, 'catalog-progress'),
+      element('p', `При выполнении этого действия и повторной публикации: ${card.rating.total} → ${action.score_after} баллов.`));
+    if (validPosition(action.rank_after, insights.total)) {
+      item.append(element('p', `Предполагаемое место №${action.rank_after} из ${insights.total}.`));
+    }
+    scenarios.append(item);
+  }
+  section.append(element('p', 'Каждое действие — отдельный сценарий от текущей карточки. Прогнозы не суммируются.', 'catalog-muted'), scenarios,
+    element('p', 'Предпросмотр по текущему состоянию каталога. Место изменится после подтверждения и публикации.', 'catalog-muted'));
+  if (!scenarios.children.length) section.append(element('p', 'Прогноз улучшений пока недоступен для этой версии карточки.'));
+  return section;
+}
+
+function reviewSection(card) {
+  const section = element('section', undefined, 'catalog-review');
+  section.append(element('h4', 'Что стоит уточнить до старта'));
+  const insights = currentInsights(card);
+  const review = card.catalog_insights?.review;
+  if (review?.status === 'stale' || (review?.revision != null && review.revision !== card.revision)) {
+    section.append(element('p', 'Карточка изменилась — результаты проверки устарели'));
+    return section;
+  }
+  if (!insights) {
+    section.append(element('p', 'Проверка недоступна для этой версии карточки.'));
+    return section;
+  }
+  if (!review || review.status === 'not_run') {
+    section.append(element('p', 'Проверка ещё не выполнена'));
+    return section;
+  }
+  if (review.mode === 'mock') section.append(element('p', 'Демонстрационная проверка · mock. Это не реальный AI-анализ.', 'catalog-warning'));
+  if (review.status !== 'complete' || review.revision !== card.revision || !Array.isArray(review.issues)) {
+    section.append(element('p', 'Проверка сейчас недоступна. Это не мешает отправить отклик.'));
+    return section;
+  }
+  if (!review.issues.length) {
+    section.append(element('p', 'Проверка не выявила замечаний; это не гарантия реализуемости'));
+    return section;
+  }
+  for (const issue of review.issues.slice(0, 3)) {
+    if (!issue) continue;
+    const item = element('article', undefined, 'catalog-review-issue');
+    item.append(element('h5', FIELDS[issue.field] || (issue.field === 'title' ? 'Название' : issue.field || 'Карточка')),
+      element('p', issue.kind === 'rule' ? 'Проверка правилом'
+        : issue.kind === 'ai' ? 'AI-предположение — требует проверки человеком'
+          : 'Замечание — требует проверки человеком', 'catalog-muted'));
+    if (issue.quote) item.append(element('blockquote', issue.quote));
+    if (issue.message) item.append(element('p', issue.message));
+    if (issue.question) item.append(element('p', `Вопрос бизнесу: ${issue.question}`));
+    section.append(item);
+  }
+  return section;
+}
+
 /** Mount with the Promise-based adapter from TEAM.md. refresh() reloads the active filters. */
 export function mountCatalog(root, api) {
   const panel = element('section', undefined, 'catalog-panel');
@@ -156,7 +245,10 @@ export function mountCatalog(root, api) {
       const open = button(card.id === selectedId ? 'Карточка открыта' : 'Посмотреть задачу', () => openCard(card.id));
       open.setAttribute('aria-pressed', String(card.id === selectedId));
       item.append(element('p', card.industry || 'Отрасль не указана', 'catalog-eyebrow'),
-        element('h3', card.title || 'Задача без названия'), badges(card),
+        element('h3', card.title || 'Задача без названия'), badges(card));
+      const position = positionLabel(card);
+      if (position) item.append(position);
+      item.append(
         element('p', card.need || card.context || 'Описание пока не заполнено.'), open);
       list.append(item);
     }
@@ -220,6 +312,8 @@ export function mountCatalog(root, api) {
     const title = element('h3', card.title || 'Задача без названия');
     title.tabIndex = -1;
     detail.append(title, badges(card));
+    const position = positionLabel(card);
+    if (position) detail.append(position);
     const fields = element('dl', undefined, 'catalog-facts');
     for (const [key, label] of Object.entries(FIELDS)) {
       const value = element('dd', card[key] || 'Не указано');
@@ -238,7 +332,7 @@ export function mountCatalog(root, api) {
     if (card.rating?.missing_fields?.length) {
       rating.append(element('p', `Не хватает: ${card.rating.missing_fields.map(key => FIELDS[key] || key).join(', ')}`));
     }
-    detail.append(rating, proposalForm(card), proposalSection());
+    detail.append(rating, reviewSection(card), improvementSection(card), proposalForm(card), proposalSection());
   }
 
   function proposalForm(card) {

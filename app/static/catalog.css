@@ -22,6 +22,11 @@
 .catalog-panel .catalog-page-number { font-size: 14px; }
 .catalog-panel .catalog-navigation-warning:not(:empty) { padding: 16px; margin-bottom: 16px; background: #fff0cc; border-radius: 10px; }
 .catalog-panel .catalog-navigation-warning button { margin: 4px 8px 4px 0; }
+.catalog-panel .catalog-rank { font-size: 14px; font-weight: 700; color: #175139; }
+.catalog-panel .catalog-insights, .catalog-panel .catalog-review { margin-top: 20px; padding: 20px 0; border: 0; border-top: 1px solid var(--catalog-line); border-radius: 0; }
+.catalog-panel .catalog-scenarios { padding-left: 24px; }
+.catalog-panel .catalog-scenarios li { margin: 16px 0; padding-left: 4px; }
+.catalog-panel .catalog-review-issue { padding: 16px; margin-top: 12px; background: #f5f8f4; border: 1px solid var(--catalog-line); border-radius: 10px; }
 .catalog-panel .catalog-field { display: grid; gap: 6px; flex: 1; min-width: 180px; font-size: 14px; font-weight: 650; }
 .catalog-panel input, .catalog-panel select, .catalog-panel textarea {
   width: 100%; min-height: 44px; border: 1px solid #a1b5aa; border-radius: 9px;
