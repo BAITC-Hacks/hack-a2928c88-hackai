@@ -1,0 +1,53 @@
+# Разработчик 1 — T-001: надёжный экран бизнеса, 30–40 минут
+
+**Ветка:** team/business-ui. **Файлы:** app/static/business.js, app/static/business.css. Продолжить коммит 9cafaa7.
+
+1. **Исключить потерю ввода при запросах.** Сейчас run() блокирует только кнопки, а поля остаются редактируемыми; ответ сервера перерисовывает форму. На время create/clarify/build/save/confirm/publish блокировать соответствующие inputs/textarea/checkbox. После ошибки сохранять введённые значения и восстанавливать прежнее disabled/readOnly-состояние, а не включать всё подряд.
+2. **Закрыть повторное выполнение старых шагов.** После сборки карточки старые «Уточнить задачу»/«Собрать карточку» не должны стирать ответы или создавать впечатление новой сборки (backend возвращает уже созданную карточку). Дальнейшие изменения — в редакторе; новая задача — через имеющуюся кнопку сброса. Если createDraft прошёл, а clarify упал, повтор не должен отправлять старый draftId вместе с изменённым на экране описанием: либо фиксировать исходный текст, либо явно начинать новый черновик.
+3. **Разделить намерение подтвердить и факт подтверждения.** Галочка для неподтверждённого поля означает «Подтвердить это поле», статус «Подтверждено бизнесом» показывать только из confirmed_fields сервера. Простое снятие галочки не отзывает серверное подтверждение — не изображать обратное. Правка текста снимает подтверждение; сохранение само его не возвращает. При конфликте версии дать явную кнопку загрузки через api.getCard(id), предупредив о замене несохранённых правок; никаких автоматических повторных подтверждений.
+
+**Приёмка:** на реальном локальном API слабый текст → минимум 3 вопроса → ответы → карточка с 0 → подтверждение и рост → правка и падение → повторное подтверждение → публикация и переход в каталог. Проверить также сохранение+подтверждение одной кнопкой, пустое поле, ошибку сети и быстрый двойной клик. Во время запроса ввод не теряется; старые шаги не сбрасывают карточку. Пришлите хеш коммита и краткий результат проверки. Не добавляйте собственный mock, формулу, AI или backend.
+
+Перед работой сохраните свои изменения коммитом, выполните `git fetch origin`, затем в СВОЕЙ ветке `git merge origin/main`. Не используйте reset/force push. Команды запуска — ниже. Оба разработчика работают параллельно, каждый только в своих двух файлах.
+
+Экспорт: `export function mountBusiness(root, api, onPublished)`. DOM только внутри root. CSS ограничить классом `.business-panel`. Баллы не вычислять в JS; читать rating из API. После правки снять отметку подтверждения поля; отправлять изменения и отдельно подтверждения. Тексты/цитаты вставлять через textContent, не innerHTML.
+
+## Запуск и разделение ответственности
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Если .venv отсутствует, сначала `python -m venv .venv`. Для проверок используйте MOCK=1 в локальном .env (ключи не нужны). Открывайте http://127.0.0.1:8000. Это работающий API, не будущий контракт. Чужой экран может отсутствовать в вашей ветке — не создавайте его заново. Изменения локальной ветки не появляются на Render автоматически.
+
+Codex: ревью и интеграция обоих коммитов, проверка полного сценария, адаптер/backend при необходимости, новый приватный образ и обновление деплоя. Четыре UI-файла остаются за владельцами. Коммиты, созданные преимущественно Codex, — с префиксом [codex].
+
+## Общий контракт для независимой работы
+
+Методы `api` возвращают Promise. Интерфейс реализован в app/static/api.js и app/main.py. Версии If-Match и demo-роли передаёт адаптер; экраны вызывают методы ниже.
+
+```js
+// Экран бизнеса
+api.createDraft({text, industry}) // -> {id}
+api.clarifyDraft(draftId) // -> {questions:[{id,field,question}], mode:'live'|'mock'}
+api.buildCard(draftId, {answers:{questionId:'текст'}}) // -> CardView
+api.updateCard(cardId, {changes:{field:'значение'}}) // -> CardView, без подтверждения
+api.confirmCard(cardId, {fields:['context','need']}) // -> CardView
+api.publishCard(cardId) // -> CardView; вызвать onPublished()
+api.getCard(cardId) // -> актуальный CardView; только по явному действию при конфликте
+
+// Каталог и отклики
+api.listCards({industry:'', level:''}) // -> CardView[], по рейтингу
+api.listTeams() // -> [{id,name,interests,skills,technologies}]
+api.createProposal(cardId, {team_id,idea,plan,timeline,prototype_url}) // -> ProposalView
+api.listProposals(cardId) // -> ProposalView[]
+api.decideProposal(proposalId, {action:'select'|'reject'}) // -> ProposalView
+api.confirmMilestone(proposalId) // -> {points:10, already_awarded:false}
+```
+
+`CardView = {id, industry, title, context, need, users, data, constraints, expected_result, success_criteria, contact, interaction_format, feedback_process, confirmed_fields:[], evidence:{field:{source_id,quote}}, rating:{total,level,items:[{key,label,maximum,earned,explanation}],missing_fields:[]}, published, synthetic, mode}`.
+
+`ProposalView = {id, task_id, team_id, team_name, idea, plan, timeline, prototype_url, status:'pending'|'selected'|'rejected', progress_points}`.
+
+Уровни: `draft` / `working` / `ready` / `priority`; русские подписи «Черновик» / «Рабочая» / «Готовая» / «Приоритетная». Синтетику и mock показывать явно. Проверяемая исходная схема в app/schemas.py; API-адаптер превратит её в CardView. Расширение внутренних подполей рейтинга не должно менять этот интерфейс без согласования с ребятами.
