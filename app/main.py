@@ -17,6 +17,8 @@ from app.review import CardReviewer, review_view, carry_review
 from app.insights import catalog_insights
 from app.schemas import Model, Draft, TaskCard, CardContent, CardField, Proposal, TeamProfile, NonEmpty
 from app.store import Store
+from app.specification import SpecGenerator, spec_state, reviewed_document
+from app.spec_routes import install_spec_routes
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent.parent
@@ -82,7 +84,8 @@ def card_view(record):
     value.update(confirmed_fields=[f for f in CardContent.model_fields if is_confirmed(card, f)],
         rating=calculate_rating(card).model_dump(), evidence=record["evidence"],
         mode=record["mode"], provider=record.get("provider", "mock"), warnings=record.get("warnings", []),
-        review=review_view(record), revision=record["revision"], published=record.get("snapshot") is not None,
+        review=review_view(record), specification=spec_state(record),
+        revision=record["revision"], published=record.get("snapshot") is not None,
         has_unpublished_changes=bool(record.get("snapshot") and (
             record["snapshot"]["revision"] != record["revision"] or
             (record.get('review') and record['snapshot'].get('review') != review_view(record)))))
@@ -125,10 +128,11 @@ def seed(store):
         Store.put(db, "meta", "seeded", {"done": True})
 
 
-def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None):
+def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None, spec_generator=None):
     store = Store(database_path or os.getenv("DATABASE_PATH", "data/runtime/sana.sqlite3"))
     ai = extractor or Extractor()
     critic = reviewer or CardReviewer(ai)
+    spec_ai = spec_generator or SpecGenerator(ai.reserve if hasattr(ai, "reserve") else Extractor().reserve)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -139,6 +143,7 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
 
     app = FastAPI(title="Sana Hub", version="0.2.0", lifespan=lifespan)
     app.state.store = store
+    install_spec_routes(app, store, spec_ai, business, require, check_revision)
 
     @app.get("/health")
     def health():
@@ -287,6 +292,11 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
             if sum(len(getattr(updated, f)) for f in CardContent.model_fields) > 30000:
                 raise ValueError("Card exceeds 30000 characters")
             record["card"] = updated.model_dump()
+            if any(getattr(card, f) != value for f, value in body.changes.items()):
+                spec = record.get("specification", {})
+                if spec.get("content"):
+                    spec["status"] = "stale"
+                    spec["approved_at"] = None
             for f, value in body.changes.items():
                 if getattr(card, f) != value:
                     record["evidence"].pop(f, None)
@@ -308,11 +318,15 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
             card = TaskCard.model_validate(record["card"])
             if not card.title.strip() or any(getattr(card, f).strip() and not is_confirmed(card, f) for f in CardContent.model_fields):
                 raise HTTPException(422, "Укажите название и подтвердите каждое заполненное поле")
+            specification = spec_state(record)
+            if specification["enabled"] and specification["status"] != "approved":
+                raise HTTPException(422, "Проверьте и утвердите актуальное ТЗ или выключите его подготовку")
             record["revision"] += 1
             carry_review(record, record['revision'] - 1)
             record.setdefault("first_published_at", datetime.now(timezone.utc).isoformat())
             record["snapshot"] = card_view(record)
             record["snapshot"].update(published=True, has_unpublished_changes=False, first_published_at=record["first_published_at"])
+            record["snapshot"]["technical_specification"] = reviewed_document(record) if specification["enabled"] else None
             Store.put(db, "card", id, record)
             return {**card_view(record), 'catalog_insights': catalog_insights(record['snapshot'], published(db))}
 

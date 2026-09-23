@@ -1,4 +1,5 @@
 // T-001: экран бизнеса. Баллы не считаем — только показываем rating из API.
+import {mountSpecification} from './specification.js';
 const FIELDS = [
   ['title', 'Название'],
   ['context', 'Контекст'],
@@ -93,6 +94,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     const card = await api.getCard(state.card.id);
     state.conflict = false;
     reloadBtn.hidden = reloadWarning.hidden = true;
+    specPanel.reset();
     showCard(card, null);
   }));
   const resetBtn = el('button', {type: 'button', class: 'bp-link', text: 'Новая задача'});
@@ -101,6 +103,12 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     el('div', {}, el('p', {class: 'eyebrow', text: 'Бизнесу'}), el('h2', {text: 'Паспорт готовности задачи'})),
     resetBtn);
   root.append(head, steps, status, error, reloadWarning, reloadBtn, inputStep, questionStep, cardStep);
+  const specRoot = el('section', {hidden:true});
+  root.append(specRoot);
+  const specPanel = mountSpecification(specRoot, api, {
+    run, lock:lockControls, blocked:()=>state.dirty.size > 0 || state.conflict,
+    onChange:card=>{state.card=card; const panel=cardStep.querySelector('.bp-review'); if(panel) renderReview(panel); syncSteps();},
+  });
 
   function renderSteps() {
     const card = state.card;
@@ -265,6 +273,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     state.dirty.clear();
     state.checked.clear();
     renderCard(previousTotal);
+    specPanel.setCard(card);
     syncSteps();
   }
 
@@ -313,6 +322,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       run(publishBtn, 'Публикуем…', async () => {
         if (state.conflict) throw new Error('Сначала загрузите актуальную карточку');
         if (state.dirty.size) throw new Error('Сохраните и подтвердите изменённые поля перед публикацией');
+        if (specPanel.hasUnsaved()) throw new Error('Сохраните и утвердите правки ТЗ перед публикацией');
         const card = await api.publishCard(state.card.id);
         showCard(card, null);
         const done = cardStep.querySelector('.bp-success');
@@ -445,6 +455,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       try {
         const updated = await api.reviewCard(card.id);
         state.card = updated;
+        specPanel.setCard(updated);
         renderReview(panel);
         lockControls();
       } catch (error) {

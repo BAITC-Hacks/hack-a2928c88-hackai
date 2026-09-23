@@ -1,4 +1,5 @@
 // T-002: каталог для команд и решения бизнеса. Порядок и баллы приходят из API.
+import {specificationPreview} from './specification.js';
 const LEVELS = { draft: 'Черновик', working: 'Рабочая', ready: 'Готовая', priority: 'Приоритетная' };
 const FIELDS = {
   context: 'Контекст', need: 'Задача', users: 'Пользователи', data: 'Данные',
@@ -492,6 +493,15 @@ export function mountCatalog(root, api) {
 
   function taskPanel(card) {
     const nodes = [];
+    if (card.technical_specification) {
+      const spec = element('details', undefined, 'catalog-specification');
+      spec.append(element('summary', 'Техническое задание, утверждённое бизнесом'));
+      const download = element('a', 'Скачать утверждённое ТЗ в PDF', 'spec-download');
+      download.href = `/api/cards/${encodeURIComponent(card.id)}/specification.pdf`;
+      download.download = 'sana-specification.pdf';
+      spec.append(download, specificationPreview(card.technical_specification));
+      nodes.push(spec);
+    }
     const rec = state.recs.find(r => r.id === card.id);
     const team = state.teams.find(t => String(t.id) === state.teamId);
     if (rec && team) nodes.push(element('p', `Совпадает с профилем ${team.name}: ${rec.matched.join(', ')}.`, 'catalog-fit'));

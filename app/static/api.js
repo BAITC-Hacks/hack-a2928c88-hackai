@@ -1,6 +1,6 @@
 // Shared contract from docs/TEAM.md. Screens never calculate scores themselves.
 const revisions = new Map();
-async function request(path, {method = 'GET', body, role, cardId, withTotal = false} = {}) {
+async function request(path, {method = 'GET', body, role, cardId, withTotal = false, blob = false} = {}) {
   const headers = {'Content-Type': 'application/json'};
   if (role) headers['X-Demo-Role'] = role;
   if (cardId) {
@@ -14,6 +14,7 @@ async function request(path, {method = 'GET', body, role, cardId, withTotal = fa
     throw new Error('Нет связи с сервером. Повторите запрос.');
   }
   let data;
+  if (response.ok && blob) return response.blob();
   try { data = await response.json(); }
   catch {
     throw new Error(response.ok
@@ -29,7 +30,7 @@ async function request(path, {method = 'GET', body, role, cardId, withTotal = fa
     error.status = response.status;
     throw error;
   }
-  if (data.id && data.revision) revisions.set(data.id, data.revision);
+  if (data.id && data.revision) revisions.set(data.id, Math.max(revisions.get(data.id) || 0, data.revision));
   if (withTotal) return {items: data, total: Number(response.headers.get('X-Total-Count') ?? data.length)};
   return data;
 }
@@ -41,6 +42,12 @@ export const api = {
   clarifyDraft: draftId => request(`/drafts/${id(draftId)}/clarify`, {method:'POST', role:'business'}),
   buildCard: (draftId, body) => request(`/drafts/${id(draftId)}/card`, {method:'POST', body, role:'business'}),
   getCard: cardId => request(`/cards/${id(cardId)}`),
+  getSpecificationDraft: cardId => request(`/cards/${id(cardId)}/specification/draft`, {role:'business'}),
+  setSpecificationEnabled: (cardId, enabled) => request(`/cards/${id(cardId)}/specification/settings`, {method:'PATCH', body:{enabled}, role:'business', cardId}),
+  generateSpecification: cardId => request(`/cards/${id(cardId)}/specification/generate`, {method:'POST', role:'business', cardId}),
+  saveSpecification: (cardId, body) => request(`/cards/${id(cardId)}/specification/draft`, {method:'PUT', body, role:'business', cardId}),
+  approveSpecification: cardId => request(`/cards/${id(cardId)}/specification/approve`, {method:'POST', role:'business', cardId}),
+  downloadSpecificationDraft: cardId => request(`/cards/${id(cardId)}/specification/draft.pdf`, {role:'business', cardId, blob:true}),
   reviewCard: cardId => request(`/cards/${id(cardId)}/review`, {method:'POST', role:'business', cardId}),
   updateCard: (cardId, body) => request(`/cards/${id(cardId)}`, {method:'PATCH', body, role:'business', cardId}),
   confirmCard: (cardId, body) => request(`/cards/${id(cardId)}/confirm`, {method:'POST', body, role:'business', cardId}),
