@@ -39,23 +39,50 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   root.classList.add('business-panel');
   root.replaceChildren();
 
-  const state = {draftId: null, questions: [], card: null, dirty: new Set(), checked: new Set(), busy: false};
+  const state = {draftId: null, questions: [], questionsReady: false, card: null, dirty: new Set(), checked: new Set(), busy: false, conflict: false};
+  const locked = new Map();
 
   const status = el('p', {class: 'bp-status', role: 'status', 'aria-live': 'polite'});
   const error = el('p', {class: 'bp-error', role: 'alert', hidden: true});
   const inputStep = el('div', {class: 'bp-step'});
   const questionStep = el('div', {class: 'bp-step', hidden: true});
   const cardStep = el('div', {class: 'bp-step', hidden: true});
-  root.append(el('h2', {text: 'Опишите задачу бизнеса'}), status, error, inputStep, questionStep, cardStep);
+  const reloadBtn = el('button', {type: 'button', text: 'Загрузить актуальную карточку', hidden: true});
+  const reloadWarning = el('p', {class: 'bp-hint', hidden: true, text: 'Загрузка заменит несохранённые правки и снимет все отметки для подтверждения. Нажмите кнопку только если готовы их потерять.'});
+  reloadBtn.addEventListener('click', () => run(reloadBtn, 'Загружаем…', async () => {
+    const card = await api.getCard(state.card.id);
+    state.conflict = false;
+    reloadBtn.hidden = reloadWarning.hidden = true;
+    showCard(card, null);
+  }));
+  const resetBtn = el('button', {type: 'button', class: 'bp-link', text: 'Новая задача'});
+  resetBtn.addEventListener('click', () => { if (!state.busy) mountBusiness(root, api, onPublished); });
+  root.append(el('h2', {text: 'Опишите задачу бизнеса'}), status, error, reloadWarning, reloadBtn, inputStep, questionStep, cardStep, resetBtn);
 
-  // Один запрос за раз: блокируем все кнопки экрана, показываем загрузку и ошибку.
+  function lockControls() {
+    if (!state.busy) return;
+    for (const control of root.querySelectorAll('button, input, textarea, select')) {
+      if (!locked.has(control)) locked.set(control, {disabled: control.disabled, readOnly: control.readOnly});
+      control.disabled = true;
+    }
+  }
+
+  function syncSteps() {
+    // A created draft keeps its original source even when clarification fails.
+    if (state.draftId) text.readOnly = industry.readOnly = true;
+    clarifyBtn.disabled = state.questionsReady || !!state.card;
+    inputStep.hidden = questionStep.hidden = !!state.card;
+    if (!state.card) questionStep.hidden = !state.questionsReady;
+    lockControls();
+  }
+
+  // Один запрос за раз; сохраняем состояния всех элементов, включая новый DOM.
   async function run(button, loadingText, action) {
     if (state.busy) return;
     state.busy = true;
     error.hidden = true;
     status.textContent = loadingText;
-    const buttons = root.querySelectorAll('button');
-    buttons.forEach(b => { b.disabled = true; });
+    lockControls();
     const label = button.textContent;
     button.textContent = loadingText;
     root.setAttribute('aria-busy', 'true');
@@ -66,11 +93,21 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       status.textContent = '';
       error.textContent = 'Ошибка: ' + (e && e.message ? e.message : 'не удалось выполнить запрос');
       error.hidden = false;
+      if (state.card && (e?.status === 409 || /Карточка изменилась|конфликт|устаревш/i.test(e?.message || ''))) {
+        state.conflict = true;
+        reloadBtn.hidden = reloadWarning.hidden = false;
+        error.textContent = 'Карточка изменена в другом окне. Ваши правки сохранены на экране. Загрузите актуальную версию перед следующим действием.';
+      }
     } finally {
       button.textContent = label;
-      root.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      for (const [control, original] of locked) {
+        control.disabled = original.disabled;
+        if (original.readOnly !== undefined) control.readOnly = original.readOnly;
+      }
+      locked.clear();
       root.removeAttribute('aria-busy');
       state.busy = false;
+      syncSteps();
     }
   }
 
@@ -94,6 +131,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
 
   inputForm.addEventListener('submit', event => {
     event.preventDefault();
+    if (state.busy || state.card || state.questionsReady) return;
     if (!text.value.trim() || !industry.value.trim()) {
       error.textContent = 'Заполните описание и отрасль';
       error.hidden = false;
@@ -106,6 +144,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       }
       const result = await api.clarifyDraft(state.draftId);
       state.questions = result.questions || [];
+      state.questionsReady = true;
       text.readOnly = industry.readOnly = true;
       renderQuestions(result);
     });
@@ -128,6 +167,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     const form = el('form', {class: 'bp-form'}, list, el('div', {class: 'bp-actions'}, buildBtn));
     form.addEventListener('submit', event => {
       event.preventDefault();
+      if (state.busy || state.card) return;
       run(buildBtn, 'Собираем карточку…', async () => {
         const payload = {};
         for (const [id, area] of answers) if (area.value.trim()) payload[id] = area.value.trim();
@@ -146,8 +186,9 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   function showCard(card, previousTotal) {
     state.card = card;
     state.dirty.clear();
-    state.checked = new Set(card.confirmed_fields || []);
+    state.checked.clear();
     renderCard(previousTotal);
+    syncSteps();
   }
 
   function renderCard(previousTotal) {
@@ -167,6 +208,8 @@ export function mountBusiness(root, api, onPublished = () => {}) {
 
     confirmBtn.addEventListener('click', () => {
       run(confirmBtn, 'Подтверждаем…', async () => {
+        if (state.conflict) throw new Error('Сначала загрузите актуальную карточку');
+        if (!state.checked.size) throw new Error('Отметьте хотя бы одно заполненное неподтверждённое поле');
         await saveChanges();
         const confirmed = new Set(state.card.confirmed_fields || []);
         const fields = [...state.checked].filter(f => !confirmed.has(f) && (state.card[f] || '').trim());
@@ -178,6 +221,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
 
     publishBtn.addEventListener('click', () => {
       run(publishBtn, 'Публикуем…', async () => {
+        if (state.conflict) throw new Error('Сначала загрузите актуальную карточку');
         if (state.dirty.size) throw new Error('Сохраните и подтвердите изменённые поля перед публикацией');
         const card = await api.publishCard(state.card.id);
         showCard(card, null);
@@ -188,9 +232,6 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       });
     });
 
-    const resetBtn = el('button', {type: 'button', class: 'bp-link', text: 'Новая задача'});
-    resetBtn.addEventListener('click', () => { if (!state.busy) mountBusiness(root, api, onPublished); });
-
     cardStep.replaceChildren(...[
       el('h3', {text: 'Карточка задачи'}),
       badges(card),
@@ -199,12 +240,14 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       el('p', {class: 'bp-hint', text: 'Проверьте каждое поле. После правки поле нужно сохранить и подтвердить заново. Опубликовать можно карточку с названием, где подтверждены все заполненные поля.'}),
       el('div', {class: 'bp-layout'}, fieldsBox, renderRating(card.rating, previousTotal)),
       unconfirmedHint(card),
-      el('div', {class: 'bp-actions'}, saveBtn, confirmBtn, publishBtn, resetBtn),
+      el('div', {class: 'bp-actions'}, saveBtn, confirmBtn, publishBtn),
       published].filter(Boolean));
     cardStep.hidden = false;
+    lockControls();
   }
 
   async function saveChanges() {
+    if (state.conflict) throw new Error('Сначала загрузите актуальную карточку');
     if (!state.dirty.size) return;
     const changes = {};
     for (const f of state.dirty) changes[f] = cardStep.querySelector('[data-field="' + f + '"]').value;
@@ -212,7 +255,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     const before = state.card.rating.total;
     showCard(await api.updateCard(state.card.id, {changes}), before);
     // Отметки пользователя на несохранённых раньше полях не теряем — подтверждение уходит отдельным запросом.
-    for (const f of checked) state.checked.add(f);
+    for (const f of checked) if ((state.card[f] || '').trim() && !(state.card.confirmed_fields || []).includes(f)) state.checked.add(f);
     renderCard(before);
   }
 
@@ -223,13 +266,15 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       ? el('textarea', {id, rows: 3, value})
       : el('input', {id, value});
     input.dataset.field = key;
-    const check = el('input', {type: 'checkbox', id: id + '-ok', checked: state.checked.has(key), disabled: !value.trim()});
     const confirmedOnServer = (card.confirmed_fields || []).includes(key);
+    const check = el('input', {type: 'checkbox', id: id + '-ok', checked: state.checked.has(key), disabled: confirmedOnServer || !value.trim()});
+    const confirmationStatus = el('p', {class: 'bp-confirmation', text: confirmedOnServer ? 'Подтверждено бизнесом' : 'Не подтверждено'});
     const row = el('div', {class: 'bp-field' + (confirmedOnServer ? ' bp-confirmed' : '')},
       el('label', {for: id, class: 'bp-field-label', text: label}),
       input,
       evidence(card.evidence && card.evidence[key]),
-      el('label', {class: 'bp-check', for: id + '-ok'}, check, document.createTextNode(' Подтверждено человеком')));
+      confirmationStatus,
+      el('label', {class: 'bp-check', for: id + '-ok'}, check, document.createTextNode(' Подтвердить это поле')));
 
     input.addEventListener('input', () => {
       state.dirty.add(key);
@@ -238,6 +283,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       check.disabled = !input.value.trim();
       row.classList.remove('bp-confirmed');
       row.classList.add('bp-dirty');
+      confirmationStatus.textContent = 'Есть несохранённые правки — после сохранения потребуется подтверждение';
     });
     check.addEventListener('change', () => {
       if (check.checked) state.checked.add(key); else state.checked.delete(key);
