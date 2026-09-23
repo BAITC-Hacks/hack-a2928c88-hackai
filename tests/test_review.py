@@ -132,6 +132,10 @@ def test_live_review_validation_and_explicit_fallback(monkeypatch, tmp_path):
     reviewer = CardReviewer(Extractor())
     fields = CardContent(data='Available CSV').model_dump()
     assert reviewer.review(fields)['mode'] == 'live'
+    output = ReviewResult(issues=[dict(field='data', quote='Available CSV', message='Possible data issue', question='Which access?')])
+    mixed = reviewer.review(fields)
+    assert any(i['kind'] == 'ai' for i in mixed['issues'])
+    assert any(i['kind'] == 'rule' for i in mixed['issues'])
     output = ReviewResult(issues=[dict(field='data', quote='invented', message='x', question='x?')])
     assert reviewer.review(fields)['mode'] == 'mock'
     monkeypatch.setenv('FALLBACK_TO_MOCK', '0')

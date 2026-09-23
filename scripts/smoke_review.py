@@ -59,6 +59,13 @@ def main():
         page.unroute('**/api/cards/*/review')
         page.get_by_role('button', name='Проверить ещё раз', exact=True).click()
         expect(page.locator('.bp-review-status')).to_contain_text('не выявила замечаний')
+        # Saved content is restored from the server; the browser stores only its ID.
+        remembered = page.evaluate("localStorage.getItem('sana:last-business-card')")
+        assert remembered and len(remembered) == 36
+        page.reload()
+        page.get_by_role('button', name='Продолжить сохранённую карточку', exact=True).click()
+        expect(page.locator('#bp-f-data')).to_have_value('CSV из 20 синтетических вопросов доступен в учебном репозитории.')
+        expect(page.locator('.bp-total strong')).to_have_text('0')
         page.get_by_role('button', name='Отметить все для подтверждения', exact=True).click()
         page.get_by_role('button', name='Подтвердить отмеченные', exact=True).click()
         expect(page.locator('.bp-total strong')).to_have_text('100')

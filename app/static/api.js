@@ -29,7 +29,7 @@ async function request(path, {method = 'GET', body, role, cardId, withTotal = fa
     error.status = response.status;
     throw error;
   }
-  if (data.id && data.revision) revisions.set(data.id, data.revision);
+  if (data?.id && data.revision) revisions.set(data.id, data.revision);
   if (withTotal) return {items: data, total: Number(response.headers.get('X-Total-Count') ?? data.length)};
   return data;
 }
@@ -56,4 +56,8 @@ export const api = {
   listProposals: cardId => request(`/cards/${id(cardId)}/proposals`),
   decideProposal: (proposalId, body) => request(`/proposals/${id(proposalId)}/decision`, {method:'POST', body, role:'business'}),
   confirmMilestone: proposalId => request(`/proposals/${id(proposalId)}/milestone`, {method:'POST', role:'business'}),
+  getStage: proposalId => request(`/proposals/${id(proposalId)}/stage`),
+  defineStage: (proposalId, body) => request(`/proposals/${id(proposalId)}/stage`, {method:'POST', role:'business', body}),
+  submitStage: (proposalId, body) => request(`/proposals/${id(proposalId)}/stage/submission`, {method:'POST', role:'team', body}),
+  decideStage: (proposalId, body) => request(`/proposals/${id(proposalId)}/stage/decision`, {method:'POST', role:'business', body}),
 };
