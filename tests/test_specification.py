@@ -166,9 +166,16 @@ def test_generation_does_not_overwrite_concurrent_edit(tmp_path,monkeypatch):
         assert c.get(f"/api/cards/{record['id']}/specification/draft",headers=B).json()['content'] is None
 
 
-def test_openai_structured_generation_contract(monkeypatch):
+@pytest.mark.parametrize('model', [None, 'gpt-4.1-mini'])
+def test_openai_structured_generation_contract(monkeypatch, tmp_path, model):
     import openai
     monkeypatch.setenv('MOCK','0'); monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    monkeypatch.setenv('LLM_LOG_PATH', str(tmp_path / 'spec-calls.jsonl'))
+    monkeypatch.delenv('OPENAI_REASONING_EFFORT', raising=False)
+    if model is None:
+        monkeypatch.delenv('OPENAI_MODEL', raising=False)
+    else:
+        monkeypatch.setenv('OPENAI_MODEL', model)
     received={}
     source={'title':'Учебная задача','need':'Собрать заявки'}
     class FakeClient:
@@ -184,6 +191,65 @@ def test_openai_structured_generation_contract(monkeypatch):
     assert mode=='live' and provider=='openai' and calls==[1]
     assert received['store'] is False and received['text_format'] is SpecContent
     assert json.loads(received['input'])=={'source':source}
+    assert received['model'] == (model or 'gpt-5.5') and received['max_output_tokens'] == 9000
+    if model:
+        assert 'reasoning' not in received
+    else:
+        assert received['reasoning'] == {'effort': 'low'}
+    event = json.loads((tmp_path / 'spec-calls.jsonl').read_text())
+    assert event['model'] == (model or 'gpt-5.5') and event['provider'] == 'openai'
+
+
+@pytest.mark.parametrize('budget,valid_repair', [(100, True), (2, True), (100, False)])
+def test_nvidia_specification_fallback_schema_repair_and_budget(monkeypatch, tmp_path, budget, valid_repair):
+    from copy import deepcopy
+    import openai
+    from app.ai_config import NVIDIA_BASE_URL
+    from app.llm import Extractor
+
+    monkeypatch.setenv('MOCK', '0')
+    monkeypatch.setenv('OPENAI_API_KEY', 'openai-test-key')
+    monkeypatch.setenv('NVIDIA_API_KEY', 'nvidia-test-key')
+    monkeypatch.delenv('NVIDIA_MODEL', raising=False)
+    monkeypatch.setenv('FALLBACK_TO_MOCK', '1')
+    monkeypatch.setenv('MAX_CALLS_PER_HOUR', str(budget))
+    monkeypatch.setenv('LLM_LOG_PATH', str(tmp_path / 'spec-calls.jsonl'))
+    source = {'title': 'Synthetic task', 'need': 'A simple application form'}
+    requests = []
+    settings = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            settings.append(kwargs)
+            self.responses = self
+            self.chat = SimpleNamespace(completions=self)
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def parse(self, **kwargs): raise OSError('unavailable')
+        def create(self, **kwargs):
+            requests.append(deepcopy(kwargs))
+            content = template_spec(source).model_dump_json() if len(requests) == 2 and valid_repair else '{"title":"incomplete"}'
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+
+    monkeypatch.setattr(openai, 'OpenAI', FakeClient)
+    quota = Extractor()
+    result, mode, provider, failures = SpecGenerator(quota.reserve).generate(source)
+    assert failures[0] == 'openai:OSError'
+    assert settings[1]['base_url'] == NVIDIA_BASE_URL
+    assert all(r['model'] == 'meta/llama-3.3-70b-instruct' for r in requests)
+    assert [m['role'] for m in requests[0]['messages']] == ['system', 'user']
+    if budget == 2:
+        assert len(requests) == 1 and len(quota.calls) == 2
+    else:
+        assert len(requests) == 2 and len(quota.calls) == 3
+        assert [m['role'] for m in requests[1]['messages']] == ['system', 'user', 'assistant', 'user']
+    if budget > 2 and valid_repair:
+        assert mode == 'live' and provider == 'nvidia' and failures == ['openai:OSError']
+    else:
+        assert mode == 'mock' and provider == 'template' and len(failures) == 2
+    assert isinstance(result, SpecContent)
+    log = (tmp_path / 'spec-calls.jsonl').read_text()
+    assert 'nvidia-test-key' not in log and source['need'] not in log
 
 
 def test_template_handles_maximum_source():

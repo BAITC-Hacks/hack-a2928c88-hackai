@@ -20,6 +20,7 @@ from app.schemas import Model, Draft, TaskCard, CardContent, CardField, Proposal
 from app.store import Store
 from app.specification import SpecGenerator, spec_state, reviewed_document
 from app.spec_routes import install_spec_routes
+from app.ai_config import model_for
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent.parent
@@ -85,11 +86,12 @@ def card_view(record):
     value.update(confirmed_fields=[f for f in CardContent.model_fields if is_confirmed(card, f)],
         rating=calculate_rating(card).model_dump(), evidence=record["evidence"],
         mode=record["mode"], provider=record.get("provider", "mock"), warnings=record.get("warnings", []),
-        review=review_view(record), specification=spec_state(record),
+        review=review_view(record), nvidia_review=review_view(record, 'nvidia_review'), specification=spec_state(record),
         revision=record["revision"], published=record.get("snapshot") is not None,
         has_unpublished_changes=bool(record.get("snapshot") and (
             record["snapshot"]["revision"] != record["revision"] or
-            (record.get('review') and record['snapshot'].get('review') != review_view(record)))))
+            any(record.get(key) and record['snapshot'].get(key) != review_view(record, key)
+                for key in ('review', 'nvidia_review')))))
     return value
 
 
@@ -149,6 +151,8 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
     @app.get("/health")
     def health():
         return {"status": "ok", "service": "sana-hub", "demo_auth": True,
+            "ai_configuration": {"openai_model":model_for('openai'), "nvidia_model":model_for('nvidia'),
+                                 "nvidia_configured":bool(os.getenv('NVIDIA_API_KEY'))},
             "configured_mode": "mock" if os.getenv("MOCK", "1") == "1" else "live-with-fallback"}
 
     @app.post("/api/drafts", dependencies=[Depends(business)], status_code=201)
@@ -251,21 +255,30 @@ def create_app(database_path=None, seed_demo=None, extractor=None, reviewer=None
 
     @app.post("/api/cards/{id}/review", dependencies=[Depends(business)])
     def review_card(id: str, if_match: str | None = Header(default=None)):
+        return run_review(id, if_match)
+
+    @app.post("/api/cards/{id}/review/nvidia", dependencies=[Depends(business)])
+    def review_nvidia(id: str, if_match: str | None = Header(default=None)):
+        return run_review(id, if_match, second=True)
+
+    def run_review(id, if_match, second=False):
         with store.transaction() as db:
             record = require(db, "card", id)
             check_revision(record, if_match)
             fields = CardContent.model_validate({f: record['card'][f] for f in CardContent.model_fields}).model_dump()
         # No transaction is held while awaiting the provider. Recheck revision after it returns.
         try:
-            result = critic.review(fields)
+            result = critic.review_nvidia(fields) if second else critic.review(fields)
         except ValueError as exc:
             raise HTTPException(422, 'Недопустимая карточка для проверки') from exc
         except RuntimeError as exc:
+            if second:
+                raise HTTPException(503, 'Второе мнение NVIDIA недоступно. Проверьте NVIDIA_API_KEY и доступность сервиса; прежние данные сохранены.') from exc
             raise HTTPException(503, 'Проверка недоступна. Текст сохранён; попробуйте ещё раз.') from exc
         with store.transaction() as db:
             current = require(db, "card", id)
             check_revision(current, if_match)
-            current['review'] = {**result, 'revision': current['revision']}
+            current['nvidia_review' if second else 'review'] = {**result, 'revision': current['revision']}
             Store.put(db, 'card', id, current)
             return card_view(current)
 

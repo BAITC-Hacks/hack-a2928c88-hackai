@@ -39,7 +39,7 @@ export function mountSpecification(root, api, hooks) {
   function accept(result) {
     draft = result;
     dirty = false;
-    card = {...card, revision:result.revision, review:result.review,
+    card = {...card, revision:result.revision, review:result.review, nvidia_review:result.nvidia_review,
       has_unpublished_changes:!!card.published && (card.has_unpublished_changes || result.revision !== card.revision),
       specification:{enabled:result.enabled, status:result.status, stale:result.stale}};
     hooks.onChange(card);

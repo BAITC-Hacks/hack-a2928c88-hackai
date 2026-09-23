@@ -151,7 +151,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
   root.append(specRoot);
   const specPanel = mountSpecification(specRoot, api, {
     run, lock:lockControls, blocked:()=>state.dirty.size > 0 || state.conflict,
-    onChange:card=>{state.card=card; const panel=cardStep.querySelector('.bp-review'); if(panel) renderReview(panel); syncSteps();},
+    onChange:card=>{state.card=card; refreshReviews(); syncSteps();},
   });
 
   function renderSteps() {
@@ -350,6 +350,9 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     const published = el('p', {class: 'bp-success msg msg-ok', role: 'status', hidden: true});
     const reviewPanel = el('section', {class: 'bp-review', 'aria-label': 'Проверка задачи перед стартом'});
     renderReview(reviewPanel);
+    const secondPanel = el('section', {class: 'bp-nvidia-review', 'aria-label': 'Независимая проверка NVIDIA'});
+    secondPanel.dataset.reviewKey = 'nvidia_review';
+    renderReview(secondPanel);
 
     saveBtn.addEventListener('click', () => {
       if (!state.dirty.size) { status.textContent = 'Нет несохранённых изменений'; return; }
@@ -404,7 +407,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
           el('div', {class: 'bp-actionbar'},
             unconfirmedHint(card),
             el('div', {class: 'bp-actions'}, checkAll, saveBtn, confirmBtn, publishBtn)),
-          published, reviewPanel),
+          published, reviewPanel, secondPanel),
         renderRating(card.rating, previousTotal))].filter(Boolean));
     cardStep.hidden = false;
     lockControls();
@@ -452,8 +455,7 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       row.classList.remove('bp-confirmed');
       row.classList.add('bp-dirty');
       confirmationStatus.textContent = 'Есть несохранённые правки — после сохранения потребуется подтверждение';
-      const reviewPanel = cardStep.querySelector('.bp-review');
-      if (reviewPanel) renderReview(reviewPanel);
+      refreshReviews();
     });
     check.addEventListener('change', () => {
       if (check.checked) state.checked.add(key); else state.checked.delete(key);
@@ -491,23 +493,28 @@ export function mountBusiness(root, api, onPublished = () => {}) {
     input.focus({preventScroll: true});
   }
 
+  function refreshReviews() {
+    cardStep.querySelectorAll('.bp-review, .bp-nvidia-review').forEach(renderReview);
+  }
+
   function renderReview(panel) {
     const card = state.card;
-    const review = card.review || {status: 'not_run'};
+    const second = panel.dataset.reviewKey === 'nvidia_review';
+    const review = card[second ? 'nvidia_review' : 'review'] || {status: 'not_run'};
     const dirty = state.dirty.size > 0;
     const stale = review.status === 'stale' || (review.revision != null && review.revision !== card.revision);
     const btn = el('button', {type: 'button', class: 'bp-primary',
-      text: review.status === 'not_run' ? 'Что помешает начать?' : 'Проверить ещё раз'});
+      text: second ? 'Второе мнение NVIDIA' : review.status === 'not_run' ? 'Что помешает начать?' : 'Проверить ещё раз'});
     btn.disabled = dirty || state.conflict;
     btn.addEventListener('click', () => run(btn, 'Проверяем задачу…', async () => {
       if (state.dirty.size) throw new Error('Сначала сохраните изменения карточки');
       if (state.conflict) throw new Error('Сначала загрузите актуальную карточку');
       // Do not rerender the editor: preserve the human's pending confirmation checkboxes.
       try {
-        const updated = await api.reviewCard(card.id);
+        const updated = await (second ? api.reviewCardNvidia(card.id) : api.reviewCard(card.id));
         state.card = updated;
         specPanel.setCard(updated);
-        renderReview(panel);
+        refreshReviews();
         lockControls();
       } catch (error) {
         panel.querySelector('.bp-review-status').textContent = 'Проверка недоступна. Введённые данные сохранены; повторите запрос.';
@@ -515,15 +522,17 @@ export function mountBusiness(root, api, onPublished = () => {}) {
       }
     }));
     const note = el('p', {class: 'bp-review-status', role: 'status', 'aria-live': 'polite'});
-    panel.replaceChildren(el('h4', {text: 'Что стоит уточнить до старта'}),
-      el('p', {class: 'bp-hint', text: 'Проверка не меняет рейтинг и ничего не подтверждает. Ответы и решение остаются за вами.'}), btn, note);
+    panel.replaceChildren(el('h4', {text: second ? 'Независимая проверка NVIDIA' : 'Что стоит уточнить до старта'}),
+      el('p', {class: 'bp-hint', text: second
+        ? 'Второй AI читает сохранённую карточку без ответа первой модели. Замечания сохраняются отдельно; проверка не меняет баллы и подтверждения.'
+        : 'Проверка не меняет рейтинг и ничего не подтверждает. Ответы и решение остаются за вами.'}), btn, note);
     if (dirty) { note.textContent = 'Есть несохранённые правки. Сохраните их перед проверкой; прежние результаты не относятся к текущему тексту.'; return; }
     if (stale) { note.textContent = 'Карточка изменилась — результаты проверки устарели. Запустите проверку ещё раз.'; return; }
     if (review.status === 'not_run') { note.textContent = 'Проверка ещё не выполнена.'; return; }
     if (review.status !== 'complete') { note.textContent = 'Проверка недоступна. Повторите запрос.'; return; }
     panel.append(el('p', {class: 'bp-hint', text: review.mode === 'mock'
       ? 'Демонстрационная проверка · mock: только правила, без реального AI.'
-      : 'AI-проверка · ' + (review.provider || 'live') + '. Замечания требуют проверки человеком.'}));
+      : 'AI-проверка · ' + (review.provider || 'live') + (review.model ? ' · ' + review.model : '') + '. Замечания требуют проверки человеком.'}));
     if (!review.issues?.length) note.textContent = 'Проверка не выявила замечаний; это не гарантия реализуемости.';
     for (const issue of (review.issues || []).slice(0, 3)) {
       const focus = el('button', {type: 'button', class: 'bp-link', text: 'Уточнить поле'});
@@ -535,7 +544,9 @@ export function mountBusiness(root, api, onPublished = () => {}) {
         el('p', {text: issue.message}), el('p', {text: issue.question}), focus);
       panel.append(item);
     }
-    panel.append(el('p', {class: 'bp-hint', text: 'Чтобы проверка стала видна командам, опубликуйте карточку после ручного подтверждения полей.'}));
+    panel.append(el('p', {class: 'bp-hint', text: second
+      ? 'Совпадение или расхождение мнений моделей не доказывает истинность фактов. Решение принимает человек.'
+      : 'Чтобы проверка стала видна командам, опубликуйте карточку после ручного подтверждения полей.'}));
   }
 
   function renderRating(rating, previousTotal) {

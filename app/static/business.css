@@ -117,7 +117,7 @@
   .business-panel .bp-total strong { font-size: 48px; }
 }
 /* Read-only critique, visually separate from readiness points. */
-.business-panel .bp-review { margin-top: 24px; padding: 20px; border: 1px solid var(--line, #d8d8d0); border-radius: 14px; }
+.business-panel .bp-review, .business-panel .bp-nvidia-review { margin-top: 24px; padding: 20px; border: 1px solid var(--line, #d8d8d0); border-radius: 14px; }
 .business-panel .bp-review-issue { margin-top: 16px; padding: 14px; background: var(--paper, #f6f5ef); border-radius: 10px; }
 .business-panel .bp-review-issue h5 { margin: 0 0 8px; font-size: 1rem; }
 .business-panel .bp-review-issue blockquote { margin: 10px 0; padding-left: 12px; border-left: 3px solid #9a8459; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -10,6 +10,7 @@ from collections import deque
 from pydantic import Field
 
 from app.schemas import Model, FieldEvidence, Clarification
+from app.ai_config import NVIDIA_BASE_URL, model_for, openai_options
 
 
 class Extraction(Model):
@@ -87,7 +88,7 @@ class Extractor:
     def log_result(self, result, started, workflow):
         # Metadata only: no keys, business input, generated text or provider messages.
         event = {"at": datetime.now(timezone.utc).isoformat(), "workflow": workflow, "mode": result[1],
-                 "provider": result[2], "failures": result[3],
+                 "provider": result[2], "model": model_for(result[2]), "failures": result[3],
                  "elapsed_ms": round((time.monotonic() - started) * 1000)}
         path = Path(os.getenv("LLM_LOG_PATH", "logs/llm_calls.jsonl"))
         try:
@@ -104,9 +105,9 @@ class Extractor:
         failures = []
         if os.getenv("MOCK", "1") != "1":
             from openai import OpenAI
-            for provider, key_name, model_name, default in [
-                ("openai", "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4.1-mini"),
-                ("nvidia", "NVIDIA_API_KEY", "NVIDIA_MODEL", "meta/llama-3.3-70b-instruct"),
+            for provider, key_name in [
+                ("openai", "OPENAI_API_KEY"),
+                ("nvidia", "NVIDIA_API_KEY"),
             ]:
                 key = os.getenv(key_name)
                 if not key:
@@ -114,14 +115,14 @@ class Extractor:
                     continue
                 try:
                     self.reserve()
-                    kwargs = {"api_key": key, "timeout": float(os.getenv("AI_TIMEOUT_SECONDS", "12")), "max_retries": 0}
+                    kwargs = {"api_key": key, "timeout": float(os.getenv("AI_TIMEOUT_SECONDS", "45")), "max_retries": 0}
                     if provider == "nvidia":
-                        kwargs["base_url"] = "https://integrate.api.nvidia.com/v1"
+                        kwargs["base_url"] = NVIDIA_BASE_URL
                     with OpenAI(**kwargs) as client:
                         payload = json.dumps({"sources": sources, "answer_fields": answer_fields}, ensure_ascii=False)
                         if provider == "openai":
-                            response = client.responses.parse(model=os.getenv(model_name, default),
-                                instructions=PROMPT, input=payload, text_format=Extraction, max_output_tokens=3000, store=False)
+                            response = client.responses.parse(**openai_options(),
+                                instructions=PROMPT, input=payload, text_format=Extraction, max_output_tokens=6000, store=False)
                             result = response.output_parsed
                         else:
                             messages = [{"role": "system", "content": PROMPT + "\nJSON schema: " + json.dumps(Extraction.model_json_schema())},
@@ -129,8 +130,8 @@ class Extractor:
                             for attempt in range(2):
                                 if attempt:
                                     self.reserve()
-                                response = client.chat.completions.create(model=os.getenv(model_name, default),
-                                    messages=messages, response_format={"type": "json_object"}, max_tokens=3000)
+                                response = client.chat.completions.create(model=model_for(provider),
+                                    messages=messages, response_format={"type": "json_object"}, max_tokens=6000)
                                 try:
                                     result = Extraction.model_validate_json(response.choices[0].message.content)
                                     validate_evidence(result, sources)
@@ -138,6 +139,7 @@ class Extractor:
                                 except (ValueError, TypeError):
                                     if attempt:
                                         raise
+                                    messages.append({"role": "assistant", "content": response.choices[0].message.content or ""})
                                     messages.append({"role": "user", "content": "Предыдущий ответ не прошёл схему или проверку цитат. Повтори с дословными цитатами из sources."})
                         if result is None:
                             raise ValueError("No structured result")
